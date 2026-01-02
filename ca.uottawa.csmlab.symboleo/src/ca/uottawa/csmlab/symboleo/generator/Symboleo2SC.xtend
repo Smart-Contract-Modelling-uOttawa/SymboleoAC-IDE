@@ -131,24 +131,25 @@ import ca.uottawa.csmlab.symboleo.symboleo.ResourceACPolicy
 import ca.uottawa.csmlab.symboleo.symboleo.ResourceDot
 import ca.uottawa.csmlab.symboleo.symboleo.ResourceAttribute
 import ca.uottawa.csmlab.symboleo.symboleo.PowerFunction
+import ca.uottawa.csmlab.symboleo.symboleo.DataTransfer
 
 class Symboleo2SC extends SymboleoGenerator {
  
-  val ASSET_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val EVENT_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ROLE_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val POWER_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val OBLIGATION_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val CONTRACT_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val EVENTS_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val PREDICATES_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val UTILS_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ACPolicy_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ATTRIBUTE_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Rule_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Resource_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Operation_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
- val LegalSituation_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
+  val ASSET_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val EVENT_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ROLE_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val POWER_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val OBLIGATION_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val CONTRACT_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val EVENTS_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val PREDICATES_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val UTILS_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ACPolicy_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ATTRIBUTE_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Rule_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Resource_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Operation_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val LegalSituation_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
   val assets = new ArrayList<RegularType>
   val events = new ArrayList<RegularType>
   val roles = new ArrayList<RegularType>
@@ -209,8 +210,23 @@ class Symboleo2SC extends SymboleoGenerator {
       generateAsset(fsa, model, asset)
     }
     for (event : events) {
+    	
       generateEvent(fsa, model, event)
     }
+     val code = '''
+        const { Event } = require("symboleoac-js-core");
+        class Notified extends Event {
+          constructor(_name, message) {
+            super()
+            this._name = _name
+            this._type = 'Notified'
+            this.message = message || []
+          }
+        }
+        module.exports.Notified = Notified
+      '''
+      fsa.generateFile("./" + model.contractName + "/domain/events/Notified.js", code)
+      
     for (role : roles) {
       generateRole(fsa, model, role)
     }
@@ -226,7 +242,7 @@ class Symboleo2SC extends SymboleoGenerator {
         const { «asset.name» } = require("../assets/«asset.name».js")
       «ENDFOR»
       «FOR event : events»
-        const { «event.name» } = require("../events/«event.name».js")
+        const { «event.name» } = require("../events/«event.ontologyType.name=="DataTransfer"?"datatransfer/":""»«event.name».js")
       «ENDFOR»
       «FOR role : roles»
         const { «role.name» } = require("../roles/«role.name».js")
@@ -257,7 +273,8 @@ class Symboleo2SC extends SymboleoGenerator {
           this.obligations = {};
           this.survivingObligations = {};
           this.powers = {};
-          
+          //notification 
+          this.notified = new Notified ('notified')
           // assign varaibles of the contract
           «FOR variable : model.variables»
             «IF variable.type instanceof RegularType»
@@ -278,7 +295,7 @@ class Symboleo2SC extends SymboleoGenerator {
                  «{ cntt = 1; "" }»  
            			 this.«variable.name».addController(«generateExpressionString(assignment.value, 'P')»)
                     «ELSE»
-                     «Helpers.getBaseType(variable.type).ontologyType.name=='Event'? "this."+variable.name+".addPerformer("+generateExpressionString(assignment.value, 'this')+")" :"" »
+                     «Helpers.getBaseType(variable.type).ontologyType.name=='Event' || Helpers.getBaseType(variable.type).ontologyType.name=='DataTransfer'? "this."+variable.name+".addPerformer("+generateExpressionString(assignment.value, 'this')+")" :"" »
                  «ENDIF»
                  «ENDIF»
                  «ENDIF»
@@ -307,22 +324,22 @@ class Symboleo2SC extends SymboleoGenerator {
                «generateLegalpositionCondition(obligation.antecedent,"this."+obligation.name+"Situation.addAntecedentOf(")» 
            	  «ENDIF»
                 this.obligations.«obligation.name» = new Obligation('«obligation.name»', «generateDotExpressionString(obligation.creditor, 'this')», «generateDotExpressionString(obligation.debtor, 'this')», this, this.«obligation.name»Situation)
-                «getSpecifiedControllerObligation(obligation)»
+                «getSpecifiedControllerObligation(obligation,"this")»
           «ENDFOR»
           
           «FOR obligation : triggeredSurvivingObligations»
                 this.survivingObligations.«obligation.name» = new Obligation('«obligation.name»', «generateDotExpressionString(obligation.creditor, 'this')», «generateDotExpressionString(obligation.debtor, 'this')», this, true,this.«obligation.name»Situation)
-                «getSpecifiedControllerObligation(obligation)»
+                «getSpecifiedControllerObligation(obligation,"this")»
           «ENDFOR»
           
           «FOR power : triggeredPowers»
-            	this.«power.name»Situation = new LegalSituation();            
+            	this.powers.«power.name»Situation = new LegalSituation();            
            «IF !(power.antecedent instanceof PAtomPredicateTrueLiteral)»
                «generateLegalpositionCondition(power.antecedent,"this."+power.name+"Situation.addAntecedentOf(")» 
            «ENDIF»
             	this.«power.name»Situation.addConsequentOf({_type: 'stateCondition',«compilePowerCondition(power.consequent)»})
             	this.powers.«power.name» = new Power('«power.name»', «generateDotExpressionString(power.creditor, 'this')», «generateDotExpressionString(power.debtor, 'this')», this,this.«power.name»Situation)
-            	«getSpecifiedControllerPower(power)»  
+            	«getSpecifiedControllerPower(power,"this")»  
           «ENDFOR»
         
          «FOR rule : model.rules»
@@ -347,6 +364,8 @@ class Symboleo2SC extends SymboleoGenerator {
       const { getEventMap, EventListeners } = require("./events.js")
       const { Rule } = require(«Rule_CLASS_IMPORT_PATH»)
       const { error } = require("fabric-shim")
+      const { ClientIdentity, ChaincodeStub }= require('fabric-shim');
+      const crypto = require('crypto');
 «««      «FOR asset : assets»
 «««        import { «asset.name» } = require( "./domain/assets/«asset.name»")
 «««      «ENDFOR»
@@ -363,6 +382,7 @@ class Symboleo2SC extends SymboleoGenerator {
         
         constructor() {
           super('«model.contractName»');
+          
         }
       
         initialize(contract) {
@@ -391,9 +411,264 @@ class Symboleo2SC extends SymboleoGenerator {
           «method»
           
         «ENDFOR»
+          //notification
+          async trigger_notification(ctx, event) {
+        
+          console.log("trigger_notification")
+          console.log(event)
+          await ctx.stub.setEvent(event.name, Buffer.from(JSON.stringify({
+              event: event
+            })));
+          
+          return {successful: true}
+        }
+        
+         /**
+           * Stores the hardcoded rolesList in the ledger as ACPolicyRecord with a signed hash.
+           * Can only be called by Regulator or Admin.
+           * Input is not accepted to prevent tampering.
+           */
+          async storeRolesPolicy(ctx, contractId) {
+            console.log("I am in storeRolesPolicy")
+            
+            let roleObj;
+            const contractState = await ctx.stub.getState(contractId)
+            if (contractState == null) {
+              return {successful: false}
+            }
+            const contract = deserialize(contractState.toString())
+            this.initialize(contract)
+        
+            //
+            const cid = new ClientIdentity(ctx.stub);
+            const userId = cid.getID();
+            const role = cid.getAttributeValue('HF.role');
+            
+            console.log("Attr name")
+            console.log(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                cid.getAttributeValue('organization'), cid.getAttributeValue('department'))
+        
+            try{
+              if (role !== 'Admin' && role !== 'Regulator') {
+        
+              throw new Error('Only Admin or Regulator can trigger roles policy storage');
+             }else{
+                roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+        
+                     if(roleObj === null ){ 
+                      throw new Error('Unauthorized: Unknown access'); 
+        
+                }
+             }//else
+             }catch(err){
+                console.log('access control error: ', err)
+                return { successful: false, message: err.message }
+               }// end of first layer
+        
+            // Build roles policy from contract spec
+            const policy = {
+              roles: contract._roles.map(role => ({
+                name: role._name,
+                type: role._type,
+                dept: role.dept._value,
+                org: role.org._value
+              })),
+              metadata: {
+                storedBy: cid.getID(),
+                timestamp: new Date().toISOString()
+              }
+            };
+        
+            const policyStr = JSON.stringify(policy);
+            const policyHash = crypto.createHash('sha256').update(policyStr).digest();
+        
+            const record = {
+              hash: policyHash.toString('hex'),
+              policy,
+              verified: true,
+              signer: userId
+            };
+        
+            await ctx.stub.putState('ACPolicyRecord', Buffer.from(JSON.stringify(record)));
+        
+            // Emit tamper-proof event
+            await ctx.stub.setEvent('ACPolicyStored', Buffer.from(JSON.stringify({
+              accessor: userId,
+              role,
+              hash: policyHash.toString('hex'),
+              time: new Date().toISOString()
+            })));
+        
+            return {
+              successful: true,
+              hash: policyHash.toString('hex'),
+              message: 'ACPolicy stored successfully with verified signature'
+            };
+          }
+            //AC -- get rules for IoT and CEP
+            async getIoTCondition(ctx, contractId) {
+                       
+                        let roleObj;
+                        let contractState = await ctx.stub.getState(contractId)
+                        if (contractState == null) {
+                          return {successful: false}
+                        }
+                        const contract = deserialize(contractState.toString())
+                        this.initialize(contract)
+                    
+                        //
+                        const cid = new ClientIdentity(ctx.stub);
+                        const userId = cid.getID();
+                        const role = cid.getAttributeValue('HF.role');
+                        
+                        console.log("Attr name in getPolicy")
+                        console.log(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                            cid.getAttributeValue('organization'), cid.getAttributeValue('department'))
+                    
+                        try{
+                          if (role !== 'Admin' && role !== 'Regulator') {
+                    
+                          throw new Error('Only Admin or Regulator can trigger getIoTCondition');
+                         }else{
+                            roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                            cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+                    
+                                 if(roleObj === null ){ 
+                                  throw new Error('Unauthorized: Unknown access'); 
+                    
+                            }
+                         }//else
+                         }catch(err){
+                            console.log('access control error: ', err)
+                            return { successful: false, message: err.message }
+                           }// end of first layer
+               
+               contractState = await ctx.stub.getState(contractId) 
+               let rules = { rules: [], roles: [] };
+               
+               const eventList = [
+                 «variables.filter[e | Helpers.getBaseType(e.type).ontologyType.name=='DataTransfer']
+                       .map[v | "'" + v.name + "'" ]
+                       .join(", ")
+                 »
+               ];
+               
+              for (const key of eventList) {
+              
+                // skip undefined contract entries
+                if (contract[key] === undefined) continue;
+                if (!contract.hasOwnProperty(key)) continue;
+              
+                const dObj = contract[key];
+              
+                rules.rules.push({
+                  id: dObj._name + "Rule",
+                  contractId: contractId,
+                  chaincodeName: "«model.contractName.toLowerCase»",
+                  eventType: "SensorEvent",
+                  sensorType: dObj._name,
+                  sensorId: dObj.sensorId,
+                  condition: dObj.condition._value,
+                  window: "time("+dObj.window._value+ " min)",
+                  having: "count(*) >= " +dObj.count._value,
+                  select: "sensorId, sensorTimestamp, count(*) as cnt, avg(value) as avgValue",
+                  chaincodeFunction: "trigger_" + dObj._name
+                });
+              }
+               // -------------------------------
+               // Build roles list from contract
+               // -------------------------------
+               rules.roles = contract._roles.map(role => role.name._value);
+               
+               // metadata block
+               rules.metadata = {
+                 storedBy: cid.getID(),
+                 timestamp: new Date().toISOString()
+               };
+                       
+                           const ruleStr = JSON.stringify(rules);
+                           const ruleHash = crypto.createHash('sha256').update(ruleStr).digest();                      
+                           const record = {
+                             hash: ruleHash.toString('hex'),
+                             rules,
+                             verified: true,
+                             signer: userId
+                           };
+                           
+            return {
+              successful: true,
+              message: 'Retrieved successfully',
+              record: record
+            };                      
+
+                         }
+        
+          /**
+           * Allows CAAdmin or Regulator to retrieve the stored ACPolicy.
+           */
+          async getRolePolicy(ctx, contractId) {
+           
+            let roleObj;
+            const contractState = await ctx.stub.getState(contractId)
+            if (contractState == null) {
+              return {successful: false}
+            }
+            const contract = deserialize(contractState.toString())
+            this.initialize(contract)
+        
+            //
+            const cid = new ClientIdentity(ctx.stub);
+            const userId = cid.getID();
+            const role = cid.getAttributeValue('HF.role');
+            
+            console.log("Attr name in getPolicy")
+            console.log(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                cid.getAttributeValue('organization'), cid.getAttributeValue('department'))
+        
+            try{
+              if (role !== 'Admin' && role !== 'Regulator') {
+        
+              throw new Error('Only Admin or Regulator can trigger roles policy storage');
+             }else{
+                roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+        
+                     if(roleObj === null ){ 
+                      throw new Error('Unauthorized: Unknown access'); 
+        
+                }
+             }//else
+             }catch(err){
+                console.log('access control error: ', err)
+                return { successful: false, message: err.message }
+               }// end of first layer
+        
+            const policyBytes = await ctx.stub.getState('ACPolicyRecord');
+            if (!policyBytes || policyBytes.length === 0) {
+              return { successful: false, message: 'ACPolicyRecord not found' };
+            }
+        
+            const policy = JSON.parse(policyBytes.toString());
+        
+            // Emit access event for auditing
+            await ctx.stub.setEvent('ACPolicyAccessed', Buffer.from(JSON.stringify({
+              accessor: userId,
+              role,
+              time: new Date().toISOString()
+            })));
+        
+            return {
+              successful: true,
+              message: 'ACPolicy retrieved successfully',
+              policyRecord: policy
+            };
+          }
         
         //get Date And Time of any event
         async getEventDateAndTime(ctx, args) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	        	        	let roleObj;
             const inputs = JSON.parse(args);
             const contractId = inputs.contractId;
             const requiredResource = inputs.event
@@ -404,9 +679,25 @@ class Symboleo2SC extends SymboleoGenerator {
             }
             const contract = deserialize(contractState.toString())
             this.initialize(contract)
+            try{           	
+                              	       roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                              	       cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+                              	
+                              	             if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+                              	              throw new Error('Unauthorized: Unknown access'); 
+                              	         //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+                              	        // wrong certificate
+                              	        }
+                              	
+                              	    }catch(err){
+                              	        console.log('access control error: ', err)
+                              	        return { successful: false, message: err.message }
+                              	    }// end of first layer
+                              	    //seond layer
             let eventObj = contract.findObject(requiredResource.event, requiredResource._type, contract)
             if (  eventObj != null){
-            if(contract.accessPolicy.hasPermesstion('grant','read', eventObj, contract.shipper, contract.shipper) || contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', eventObj, contract.seller, contract.seller,contract)){
+            let controllers = eventObj._controller
+            if(contract.accessPolicy.hasPermesstion('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1)) || contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1))){
               output = {time: eventObj.getHappenedTime(), state: eventObj.hasHappened()  ? "Happened" : "Not Happened"}  
             }else{
               throw new Error(`access denied...`)
@@ -414,9 +705,10 @@ class Symboleo2SC extends SymboleoGenerator {
             return output
             }else{ throw new Error(`The event is not exist...`)}
           }
-      
-        //AC -- access state, time for legalpositions (obligation and power) by authorized roles 
+          //AC -- access state, time for legalpositions (obligation and power) by authorized roles 
         async getLegalPositionStateAndTime(ctx, args) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	        	        	let roleObj;
           const inputs = JSON.parse(args);
           const contractId = inputs.contractId;
           const quiredState = inputs.quiredState.state
@@ -430,19 +722,34 @@ class Symboleo2SC extends SymboleoGenerator {
         	}
           const contract = deserialize(contractState.toString())
           this.initialize(contract)
-      
+      		try{           	
+    	       roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+    	       cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+    	
+    	             if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+    	              throw new Error('Unauthorized: Unknown access'); 
+    	         //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+    	        // wrong certificate
+    	        }
+    	
+    	    }catch(err){
+    	        console.log('access control error: ', err)
+    	        return { successful: false, message: err.message }
+    	    }// end of first layer
+    	    //seond layer
           const aResource = contract.findLegalPosition(requiredResource, requiredResourceType, contract)
           if(aResource !== null){
+          	let controllers = aResource._controller
             switch(requiredResourceType.toLowerCase()){
              case 'obligation':
-               if(contract.accessPolicy.hasPermesstion('grant','read', aResource, contract.seller, contract.seller)) {
+               if(contract.accessPolicy.hasPermesstion('grant','read', aResource, roleObj, aResource.getController(controllers.length - 1))) {
                    output= contract.findStateTimeLegalPosition(aResource)
           }else{
             throw new Error(`access denied...`)
           }
           break
           case 'power': 
-            if(contract.accessPolicy.hasPermesstion('grant','read', aResource, contract.seller, contract.seller)) {
+            if(contract.accessPolicy.hasPermesstion('grant','read', aResource, roleObj, aResource.getController(controllers.length - 1))) {
                  output=contract.findStateTimeLegalPosition(aResource)
             }else{
               throw new Error(`access denied...`)
@@ -456,6 +763,8 @@ class Symboleo2SC extends SymboleoGenerator {
         
         // Access the state and time of the parts of the legalpositions
         async getStateTimeOfParts(ctx, args){
+        	const cid = new ClientIdentity(ctx.stub);
+        	        	let roleObj;
          const inputs = JSON.parse(args);
          const contractId = inputs.contractId;
          const requiredResource = inputs.condition
@@ -466,14 +775,31 @@ class Symboleo2SC extends SymboleoGenerator {
          if (contractState == null) {
            return {successful: false}
          }
-        
-         const contract = deserialize(contractState.toString())
-         this.initialize(contract)
+            const contract = deserialize(contractState.toString())
+            this.initialize(contract)
+        // First security layer
+                  	try{           	
+                  	       roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+                  	       cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+                  	
+                  	             if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+                  	              throw new Error('Unauthorized: Unknown access'); 
+                  	         //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+                  	        // wrong certificate
+                  	        }
+                  	
+                  	    }catch(err){
+                  	        console.log('access control error: ', err)
+                  	        return { successful: false, message: err.message }
+                  	    }// end of first layer
+                  	    //seond layer
+                  	    
          const aLegalPositionIncodition = contract.findLegalPosition(requiredResource.resource, requiredResource.resourceType, contract)
          if(aLegalPositionIncodition !==null){
+         	let controllers = aLegalPositionIncodition._controller
             switch(requiredResource._type.toLowerCase()){
               case 'statecondition':          
-                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, contract.buyer, contract.seller,contract)){
+                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, roleObj, aLegalPositionIncodition.getController(controllers.length - 1),contract)){
                   output=contract.findStateTimeLegalPosition(aLegalPositionIncodition)
                    if(output.State !== null && output.State !== undefined ){
                      if (output.State.toLowerCase() !== requiredResource.state.toLowerCase() ) {
@@ -486,8 +812,8 @@ class Symboleo2SC extends SymboleoGenerator {
               break
               
               case 'condition': 
-                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, contract.seller, contract.seller,contract)){
-                  let conditionValue = eval('contract.'+requiredResource.leftSide + " " + requiredResource.op + " " + requiredResource.rightSide)
+                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, roleObj, aLegalPositionIncodition.getController(controllers.length - 1),contract)){
+                  let conditionValue = eval(requiredResource.leftSide + " " + requiredResource.op + " " + requiredResource.rightSide)
                   output = {state: conditionValue, time: null}
                 }else{
                       throw new Error(`access denied...`)
@@ -495,7 +821,7 @@ class Symboleo2SC extends SymboleoGenerator {
               break
             
               case 'eventcondition':
-                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, contract.seller, contract.seller,contract)){
+                if(contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', requiredResource, roleObj, aLegalPositionIncodition.getController(controllers.length - 1),contract)){
                    let eventObj = contract.findObject(requiredResource.partResource, requiredResource.partResourceType, contract)
                    output = {time: eventObj.getHappenedTime(), state: eventObj.hasHappened()  ? "Happened" : "Not Happened"}
                 }else{
@@ -606,16 +932,21 @@ def void generateAsset(IFileSystemAccess2 fsa, Model model, RegularType asset) {
   //
    def void generateEvent(IFileSystemAccess2 fsa, Model model, RegularType event) {
     val isBase = event.ontologyType !== null
- 
+ //var RegularType base2 = Helpers.getBaseType(domainType)
+       // if (base2 !== null) {
+      //   System.out.println("eventOntologyType::::::::"+ event.ontologyType.name); 
     if (isBase === true) {
       val code = '''
-        const { Event } = require(«EVENT_CLASS_IMPORT_PATH»);
+        const { «event.ontologyType.name» } = require(«EVENT_CLASS_IMPORT_PATH»);
         const { Attribute } = require(«ATTRIBUTE_CLASS_IMPORT_PATH»);
-        class «event.name» extends Event {
+        class «event.name» extends «event.ontologyType.name» {
          	constructor(_name,performer,«event.attributes.filter[Attribute a | a.name != "performer" && a.name != "controller"].map[Attribute a | a.name].join(', ')» ) {
             super(performer)
             this._name = _name
             this._type = "«event.name»"
+            «IF((event.ontologyType.name)=="DataTransfer")»
+            this.sensorId=_name+"_sensor_"+_name + "Rule" 
+            «ENDIF»
             «FOR attribute : event.attributes»
              «IF (attribute.name !='performer' && attribute.name !='controller')»
              this.«attribute.name» = new Attribute("«attribute.name»",«attribute.name»)
@@ -626,7 +957,7 @@ def void generateAsset(IFileSystemAccess2 fsa, Model model, RegularType asset) {
         
         module.exports.«event.name» = «event.name»
       '''
-      fsa.generateFile("./" + model.contractName + "/domain/events/" + event.name + ".js", code)
+      fsa.generateFile("./" + model.contractName + "/domain/events/"+((event.ontologyType.name)=="DataTransfer"?"datatransfer/":"")+ event.name + ".js", code)
     } else if (event.regularType !== null) {
       val parentType = event.regularType
       val allAttributes = Helpers.getAttributesOfRegularType(event)
@@ -734,7 +1065,8 @@ def String getDefaultController(Model model, Variable variable){
                 	switch base.ontologyType.name {
  
                         case 'Asset':  (assignment.name == 'owner'? return generateExpressionString(assignment.value, 'this'))
-                        case 'Event':(assignment.name == 'performer'? return generateExpressionString(assignment.value, 'this'))                       
+                        case 'Event':(assignment.name == 'performer'? return generateExpressionString(assignment.value, 'this'))
+                        case 'DataTransfer':(assignment.name == 'performer'? return generateExpressionString(assignment.value, 'this'))                                              
           
                       }	
                  
@@ -769,20 +1101,20 @@ def String getDefaultControllerACPolicy(Model model) {
                        
 			}
 // Add controller from specification for power and obligation (triggered/unconditional)
-def String getSpecifiedControllerObligation(Obligation obl) {	 	
+def String getSpecifiedControllerObligation(Obligation obl, String pre) {	 	
                 var  Ref contr = obl.controller
                   		//var Ref contr = controller.getControllerType()
                 	if (contr !== null)
-            		return'this.obligations.'+obl.name+".addController(this."+(contr as VariableRef).variable+")"
+            		return pre+'.obligations.'+obl.name+".addController(this."+(contr as VariableRef).variable+")"
             		else return ""
             		                       
 			}
  
-def String getSpecifiedControllerPower(Power power){
+def String getSpecifiedControllerPower(Power power, String pre){
 	var  Ref contr = power.controller
                 				
      if (contr !== null)
-            return'this.powers.'+power.name+".addController(this."+(contr as VariableRef).variable+")"
+            return pre+'.powers.'+power.name+".addController(this."+(contr as VariableRef).variable+")"
      else return ""	
 	
 }	
@@ -818,7 +1150,7 @@ def String getSpecifiedRulesUnCond(Rule rule){
     		 addRule=addRule+"this.accessPolicy.addRulee(\""+rule.action.toLowerCase+"\", \""+contr.name.toLowerCase+"\", this."+rName+", this."+(rl as VariableRef).variable+", this."+(r2 as VariableRef).variable+")\n"
         }       
           if (rule.accessedResource instanceof ResourceDot) {
-          	System.out.print("resource dot")
+          	//System.out.print("resource dot")
           	 val resourceDot = rule.accessedResource as ResourceDot
           	val r = resourceDot.resourceDot
          
@@ -932,22 +1264,60 @@ def String compileInitMethod(Model model) {
     for (variable : eventVariables) {
       methods.add('''
         async trigger_«variable.name»(ctx, args) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	let roleObj;
         	const inputs = JSON.parse(args);
         	const contractId = inputs.contractId;
         	const event = inputs.event;
-          const contractState = await ctx.stub.getState(contractId)
-          if (contractState == null) {
-            return {successful: false}
+          	const contractState = await ctx.stub.getState(contractId)
+          	if (contractState == null) {
+	   		 return {successful: false}
           }
           const contract = deserialize(contractState.toString())
+          //notification
+          const oldMessagesList = []
+          oldMessagesList.push(contract.notified.message.slice())
           this.initialize(contract)
           if (contract.isInEffect() «survivEvent(variable.name)» ){
-          	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.«variable.name», contract.shipper, contract.shipper) || 
-          	      !contract.accessPolicy.isValid(new Rule('grant','read', contract.«variable.name», contract.shipper, contract.shipper)) ){
+          	// First security layer
+          	try{           	
+          	       roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+          	       cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+          	
+          	             if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+          	              throw new Error('Unauthorized: Unknown access'); 
+          	         //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+          	        // wrong certificate
+          	        }
+          	
+          	    }catch(err){
+          	        console.log('access control error: ', err)
+          	        return { successful: false, message: err.message }
+          	    }// end of first layer
+          	    //seond layer
+          	    let controllers = contract.«variable.name»._controller
+          	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.«variable.name»,roleObj, contract.«variable.name».getController(controllers.length - 1)) || 
+          	      !contract.accessPolicy.isValid(new Rule('grant','read', contract.«variable.name», roleObj, contract.«variable.name».getController(controllers.length - 1))) ){
           	        throw new Error(`access denied...`)
           	      }
             contract.«variable.name».happen(event)
             Events.emitEvent(contract, new InternalEvent(InternalEventSource.contractEvent, InternalEventType.contractEvent.Happened, contract.«variable.name»))
+            « var RegularType base = Helpers.getBaseType(variable.type)»
+            « IF(base !=null)»
+           	«IF(base.ontologyType.name=="DataTransfer")»
+             //Send notification about datatransfer (i.e., temperature) alert
+             let MSG= "sensorId: " + event.sensorId + ", value: " + event.value + ", sensorTimestamp: " + event.sensorTimestamp + ", " + contractId;
+             contract.notified.message.push({name: '«variable.name»Alert', message: MSG, roles:contract.accessPolicy.permissionValid(contract.«variable.name»,
+             contract._roles,contract.«variable.name».getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+             «ENDIF»
+             «ENDIF»
+             //notification
+             for (const message of contract.notified.message) {
+             if (!oldMessagesList[0].includes(message)) {
+                     this.trigger_notification(ctx, message)
+                   }
+               }
+           
             await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
             return {successful: true}
           } else {
@@ -1026,6 +1396,8 @@ def String compileInitMethod(Model model) {
     for (obligation : allObligations) {
       methods.add('''
         async violateObligation_«obligation.name»(ctx, contractId) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	    	let roleObj;
           const contractState = await ctx.stub.getState(contractId)
           if (contractState == null) {
             return {successful: false}
@@ -1035,12 +1407,41 @@ def String compileInitMethod(Model model) {
         
           if (contract.isInEffect()) {
             if (contract.obligations.«obligation.name» != null){
-            	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.obligations.«obligation.name», contract.buyer, contract.buyer) || 
-            	      !contract.accessPolicy.isValid(new Rule('grant','read', contract.obligations.«obligation.name», contract.buyer, contract.buyer)) ){
-            	        throw new Error(`access denied...`)
-            	      }
+  	            try{
+  	        
+  	               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+  	               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+  	        
+  	                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+  	                      throw new Error('Unauthorized: Unknown access'); 
+  	                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+  	                // wrong certificate
+  	                }
+  	        
+  	            }catch(err){
+  	                console.log('access control error: ', err)
+  	                return { successful: false, message: err.message }
+  	            }// end of first layer
+  	            //seond layer 
+  	          	
+  	                let controllers = contract.obligations.«obligation.name»._controller
+  	        
+  	        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.obligations.«obligation.name», roleObj, contract.obligations.«obligation.name».getController(controllers.length - 1)) || 
+  	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.obligations.«obligation.name», roleObj, contract.obligations.«obligation.name».getController(controllers.length - 1))) ){
+  	                    throw new Error(`access denied...`)
+  	                  }
+  	            let transitionState = contract.«isSurvivingObligation(obligation.name) ? "survivingObligations" : "obligations"».«obligation.name».state;
             	if (contract.obligations.«obligation.name».violated()) {      
-              		await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
+              		await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))        
+              		«val obName="contract."+(isSurvivingObligation(obligation.name) ? "survivingObligations" : "obligations"+"."+obligation.name)»
+              		//notify
+              		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + contractId;
+              		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
+	  		        //notification
+	  		        for (const message of contract.notified.message) {
+	  		                 this.trigger_notification(ctx, message)
+	  		             }
+              		
               		return {successful: true}
             	} else {
               		return {successful: false}
@@ -1058,6 +1459,8 @@ def String compileInitMethod(Model model) {
     for (obligation : allSurvivingObligations) {
       methods.add('''
         async violateSurvivingObligations_«obligation.name»(ctx, contractId) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	    	let roleObj;
           const contractState = await ctx.stub.getState(contractId)
           if (contractState == null) {
             return {successful: false}
@@ -1066,7 +1469,39 @@ def String compileInitMethod(Model model) {
           this.initialize(contract)
         
           if (contract.isInEffect() || contract.isSuccessfulTermination()) {
-            if (contract.survivingObligations.«obligation.name» != null && contract.survivingObligations.«obligation.name».violated()) {      
+          	          	            try{
+          	          	        
+          	          	               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+          	          	               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+          	          	        
+          	          	                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+          	          	                      throw new Error('Unauthorized: Unknown access'); 
+          	          	                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+          	          	                // wrong certificate
+          	          	                }
+          	          	        
+          	          	            }catch(err){
+          	          	                console.log('access control error: ', err)
+          	          	                return { successful: false, message: err.message }
+          	          	            }// end of first layer
+          	          	            //seond layer 
+          	          	          	
+          	          	                let controllers = contract.survivingObligations.«obligation.name»._controller
+          	          	        
+          	          	        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.survivingObligations.«obligation.name», roleObj, contract.survivingObligations.«obligation.name».getController(controllers.length - 1)) || 
+          	          	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.survivingObligations.«obligation.name», roleObj, contract.survivingObligations.«obligation.name».getController(controllers.length - 1))) ){
+          	          	                    throw new Error(`access denied...`)
+          	          	                  }
+          	
+            if (contract.survivingObligations.«obligation.name» != null && contract.survivingObligations.«obligation.name».violated()) { 
+				«var obName = "contract.survivingObligations."+obligation.name»
+           		//notify
+           		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + contractId;
+           		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
+  		        //notification
+  		        for (const message of contract.notified.message) {
+  		                 this.trigger_notification(ctx, message)
+  		             }     
               await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
               return {successful: true}
             } else {
@@ -1089,6 +1524,8 @@ def String compileInitMethod(Model model) {
     for (obligation : conditionalObligations) {
       methods.add('''
         async expireObligation_«obligation.name»(ctx, contractId) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	let roleObj;
           const contractState = await ctx.stub.getState(contractId)
           if (contractState == null) {
             return {successful: false}
@@ -1098,11 +1535,41 @@ def String compileInitMethod(Model model) {
         
           if (contract.isInEffect()) {
             if (contract.obligations.«obligation.name» != null){
-            	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.obligations.«obligation.name», contract.buyer, contract.buyer) || 
-            	    !contract.accessPolicy.isValid(new Rule('grant','read', contract.obligations.«obligation.name», contract.buyer, contract.buyer)) ){
-            	          throw new Error(`access denied...`)
-            	    }
-            	if (contract.obligations.«obligation.name».expired()) {      
+				try{
+				          	        
+      	               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+      	               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+      	        
+      	                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+      	                      throw new Error('Unauthorized: Unknown access'); 
+      	                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+      	                // wrong certificate
+      	                }
+      	        
+      	            }catch(err){
+      	                console.log('access control error: ', err)
+      	                return { successful: false, message: err.message }
+      	            }// end of first layer
+      	            //seond layer 
+      	          	
+      	                let controllers = contract.obligations.«obligation.name»._controller
+				  	        
+				  	        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.obligations.«obligation.name», roleObj, contract.obligations.«obligation.name».getController(controllers.length - 1)) || 
+				  	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.obligations.«obligation.name», roleObj, contract.obligations.«obligation.name».getController(controllers.length - 1))) ){
+				  	                    throw new Error(`access denied...`)
+				  	                  }
+				let transitionState = contract.«isSurvivingObligation(obligation.name) ? "survivingObligations" : "obligations"».«obligation.name».state;
+            	
+            	if (contract.obligations.«obligation.name».expired()) {         
+               		«val obName="contract."+(isSurvivingObligation(obligation.name) ? "survivingObligations" : "obligations"+"."+obligation.name)»
+               		//notify
+               		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + contractId;
+               		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
+ 	  		        //notification
+ 	  		        for (const message of contract.notified.message) {
+ 	  		                 this.trigger_notification(ctx, message)
+ 	  		             }
+            		               		    
              		 await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
               		 return {successful: true}
             	} else {
@@ -1121,6 +1588,8 @@ def String compileInitMethod(Model model) {
     for (obligation : conditionalSurvivingObligations) {
       methods.add('''
         async expireSurvivingObligation_«obligation.name»(ctx, contractId) {
+        	const cid = new ClientIdentity(ctx.stub);
+        	let roleObj;
           const contractState = await ctx.stub.getState(contractId)
           if (contractState == null) {
             return {successful: false}
@@ -1129,6 +1598,29 @@ def String compileInitMethod(Model model) {
           this.initialize(contract)
         
           if (contract.isInEffect() || contract.isSuccessfulTermination()) {
+          	try{
+          	          	        
+          	          	               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+          	          	               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+          	          	        
+          	          	                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+          	          	                      throw new Error('Unauthorized: Unknown access'); 
+          	          	                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+          	          	                // wrong certificate
+          	          	                }
+          	          	        
+          	          	            }catch(err){
+          	          	                console.log('access control error: ', err)
+          	          	                return { successful: false, message: err.message }
+          	          	            }// end of first layer
+          	          	            //seond layer 
+          	          	          	
+          	          	                let controllers = contract.survivingObligations.«obligation.name»._controller
+          	          	        
+          	          	        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.survivingObligations.«obligation.name», roleObj, contract.survivingObligations.«obligation.name».getController(controllers.length - 1)) || 
+          	          	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.survivingObligations.«obligation.name», roleObj, contract.survivingObligations.«obligation.name».getController(controllers.length - 1))) ){
+          	          	                    throw new Error(`access denied...`)
+          	          	                  }
             if (contract.survivingObligations.«obligation.name» != null && contract.survivingObligations.«obligation.name».expired()) {      
               await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
               return {successful: true}
@@ -1150,6 +1642,8 @@ def String compileInitMethod(Model model) {
     for (power : allPowers) {
       methods.add('''
         async expirePower_«power.name»(ctx, contractId) {
+        	const cid = new ClientIdentity(ctx.stub);
+            let roleObj;
           const contractState = await ctx.stub.getState(contractId)
           if (contractState == null) {
             return {successful: false}
@@ -1158,12 +1652,39 @@ def String compileInitMethod(Model model) {
           this.initialize(contract)
         
           if (contract.isInEffect()) {
-            if (contract.powers.«power.name» != null){
-            	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«power.name», contract.buyer, contract.buyer) || 
-            	    !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«power.name», contract.buyer, contract.buyer)) ){
-            	           throw new Error(`access denied...`)
-            	    } 
-            if (contract.powers.«power.name».expired()) {      
+  	            try{
+  	        
+  	               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+  	               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+  	        
+  	                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+  	                      throw new Error('Unauthorized: Unknown access'); 
+  	                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+  	                // wrong certificate
+  	                }
+  	        
+  	            }catch(err){
+  	                console.log('access control error: ', err)
+  	                return { successful: false, message: err.message }
+  	            }// end of first layer
+  	            //seond layer 
+  	          	
+  	         let controllers = contract.powers.«power.name»._controller
+  	        
+  	        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«power.name», roleObj, contract.powers.«power.name».getController(controllers.length - 1)) || 
+  	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«power.name», roleObj, contract.powers.«power.name».getController(controllers.length - 1))) ){
+  	                    throw new Error(`access denied...`)
+  	                  }
+			let transitionState = contract.powers.«power.name».state;
+            if (contract.powers.«power.name».expired()) {   
+               		«var powerName = "contract.powers."+power.name»
+               		//notify
+               		let MSG= transitionState+" Changed to "+«powerName».state+","+«powerName».name+", " + contractId;
+               		contract.notified.message.push({name: '«powerName»', message: MSG, roles:contract.accessPolicy.permissionValid(«powerName»,[«powerName».creditor,«powerName».debtor],«powerName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
+ 	  		        //notification
+ 	  		        for (const message of contract.notified.message) {
+ 	  		                 this.trigger_notification(ctx, message)
+ 	  		             }   
               await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
               return {successful: true}
             } else {
@@ -1172,9 +1693,6 @@ def String compileInitMethod(Model model) {
             } else {
                           return {successful: false}
                         }
-          } else {
-            return {successful: false}
-          }
         }
       ''')
     }
@@ -1183,8 +1701,12 @@ def String compileInitMethod(Model model) {
   
  // AC: line 104-1047 are added in the specific place so we can make the comparsion after we are sure it is inEffect not null 
     def String generatePowerTransactionForObligation(String powerName, String obligationName, String stateMethod) {
+	
     return '''
     async p_«powerName»_«stateMethod»_o_«obligationName»(ctx, contractId) {
+    	const cid = new ClientIdentity(ctx.stub);
+    	let roleObj;	
+    
       const contractState = await ctx.stub.getState(contractId)
       if (contractState == null) {
         return {successful: false}
@@ -1192,17 +1714,48 @@ def String compileInitMethod(Model model) {
       const contract = deserialize(contractState.toString())
       this.initialize(contract)
       if (contract.isInEffect() && contract.powers.«powerName» != null && contract.powers.«powerName».isInEffect()) {
-        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«powerName», contract.buyer, contract.buyer) || 
-                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«powerName», contract.buyer, contract.buyer)) ){
+            try{
+              //const userId = cid.getID();
+        
+               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+        
+                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+                      throw new Error('Unauthorized: Unknown access'); 
+                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+                // wrong certificate
+                }
+        
+            }catch(err){
+                console.log('access control error: ', err)
+                return { successful: false, message: err.message }
+            }// end of first layer
+            //seond layer 
+          	
+                let controllers = contract.powers.«powerName»._controller
+        
+        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«powerName», roleObj, contract.powers.«powerName».getController(controllers.length - 1)) || 
+                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«powerName», roleObj, contract.powers.«powerName».getController(controllers.length - 1))) ){
                     throw new Error(`access denied...`)
                   }
+         
         «IF stateMethod.equals("triggered")»
         if (contract.powers.«powerName».exerted()) {
         «ELSE»
+        let transitionState = contract.«isSurvivingObligation(obligationName) ? "survivingObligations" : "obligations"».«obligationName».state;
+        «val obName="contract."+(isSurvivingObligation(obligationName) ? "survivingObligations" : "obligations"+"."+obligationName)»
         const obligation = contract.«isSurvivingObligation(obligationName) ? "survivingObligations" : "obligations"».«obligationName»
         if (obligation != null && obligation.«stateMethod»() && contract.powers.«powerName».exerted()) {
+        	    //notify
+        	          let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " +contractId;
+        	          contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+        	
         «ENDIF»
-          await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
+          await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))          
+          //notification
+          for (const message of contract.notified.message) {
+                 this.trigger_notification(ctx, message)
+               }
           return {successful: true}
         } else {
           return {successful: false}
@@ -1216,6 +1769,8 @@ def String compileInitMethod(Model model) {
    def String generatePowerTransactionForContract(String powerName, String stateMethod) {
     return '''
     async p_«powerName»_«stateMethod»_contract(ctx, contractId) {
+    	const cid = new ClientIdentity(ctx.stub);
+    	    	let roleObj;
       const contractState = await ctx.stub.getState(contractId)
       if (contractState == null) {
         return {successful: false}
@@ -1224,21 +1779,58 @@ def String compileInitMethod(Model model) {
       this.initialize(contract)
     
       if (contract.isInEffect() && contract.powers.«powerName» != null && contract.powers.«powerName».isInEffect()) {
-      	if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«powerName», contract.buyer, contract.buyer) || 
-      	          !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«powerName», contract.buyer, contract.buyer)) ){
-      	            throw new Error(`access denied...`)
-      	          }
+            try{
+        
+               roleObj = contract.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
+               cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contract)
+        
+                     if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) exist in our conttract
+                      throw new Error('Unauthorized: Unknown access'); 
+                 //roleObj: we do not have a role that has the same name and type that calls the transaction like e.g., there is no shipper
+                // wrong certificate
+                }
+        
+            }catch(err){
+                console.log('access control error: ', err)
+                return { successful: false, message: err.message }
+            }// end of first layer
+            //seond layer 
+          	
+                let controllers = contract.powers.«powerName»._controller
+        
+        if(!contract.accessPolicy.hasPermesstion('grant','read', contract.powers.«powerName», roleObj, contract.powers.«powerName».getController(controllers.length - 1)) || 
+                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.powers.«powerName», roleObj, contract.powers.«powerName».getController(controllers.length - 1))) ){
+                    throw new Error(`access denied...`)
+                  }
+		// contract state notification
+        const stateM="«stateMethod»"
+	    //notify
+	      controllers = contract._controller
+	      let MSG= "Contract "+Contract._name+" is "+  stateM+', '+ contractId;
+	      contract.notified.message.push({name: contract._name, message: MSG, roles:contract.accessPolicy.permissionValid(contract,contract._controller,contract.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+	            
         for (let index in contract.obligations) {
           const obligation = contract.obligations[index]
           «IF stateMethod.equals("suspended")»
           obligation._suspendedByContractSuspension = true
           obligation.suspended()
+          controllers = obligation._controller
+          let MSG= "Obligation "+obligation.name+" is suspended By Contract Suspension, "+contractId;
+          contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
           «ELSEIF stateMethod.equals("resumed")»
           if (obligation._suspendedByContractSuspension === true){
             obligation.resumed()
+            controllers = obligation._controller
+            let MSG= "Obligation "+obligation.name+" is resumed By Contract resume, "+contractId;
+            contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+            
           }
           «ELSEIF stateMethod.equals("terminated")»
           obligation.terminated({emitEvent: false})
+          controllers = obligation._controller
+          let MSG= "Obligation "+obligation.name+" is terminated By Contract termination, "+contractId;
+          contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+          
           «ENDIF»
         }
         for (let index in contract.survivingObligations) {
@@ -1246,12 +1838,24 @@ def String compileInitMethod(Model model) {
           «IF stateMethod.equals("suspended")»
           obligation._suspendedByContractSuspension = true
           obligation.suspended()
+          controllers = obligation._controller
+          let MSG= "survivingObligations "+obligation.name+" is suspended By Contract Suspension, "+contractId;
+          contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+          
           «ELSEIF stateMethod.equals("resumed")»
           if (obligation._suspendedByContractSuspension === true){
             obligation.resumed()
+            controllers = obligation._controller
+            let MSG= "survivingObligation "+obligation.name+" is resumed By Contract resume, "+contractId;
+            contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+            
           }
           «ELSEIF stateMethod.equals("terminated")»
           obligation.terminated()
+          controllers = obligation._controller
+          let MSG= "survivingObligation "+obligation.name+" is terminated By Contract termination, "+contractId;
+          contract.notified.message.push({name: obligation.name, message: MSG, roles:contract.accessPolicy.permissionValid(obligation,[obligation.creditor,obligation.debtor],obligation.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+          
           «ENDIF»
         }
         for (let index in contract.powers) {
@@ -1262,15 +1866,32 @@ def String compileInitMethod(Model model) {
           «IF stateMethod.equals("suspended")»
           power._suspendedByContractSuspension = true
           power.suspended()
+          controllers = power._controller
+           let MSG= "Power "+power.name+" is suspended By Contract Suspension, "+contractId;
+           contract.notified.message.push({name: power.name, message: MSG, roles:contract.accessPolicy.permissionValid(power,[power.creditor,power.debtor],power.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+          
           «ELSEIF stateMethod.equals("resumed")»
           if (power._suspendedByContractSuspension === true){
             power.resumed()
+            controllers = power._controller
+           let MSG= "Power "+power.name+" is resumed By Contract resume, "+contractId;
+           contract.notified.message.push({name: power.name, message: MSG, roles:contract.accessPolicy.permissionValid(power,[power.creditor,power.debtor],power.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+            
           }
           «ELSEIF stateMethod.equals("terminated")»
           power.terminated()
+            controllers = power._controller
+             let MSG= "Power "+power.name+" is terminated By Contract termination, "+contractId;
+             contract.notified.message.push({name: power.name, message: MSG, roles:contract.accessPolicy.permissionValid(power,[power.creditor,power.debtor],power.getController(controllers.length - 1), contract) , time: new Date().toISOString()})
+          
           «ENDIF»
         }        
         if (contract.«stateMethod»() && contract.powers.«powerName».exerted()) {
+    	 //notification
+          for (const message of contract.notified.message) {
+                 this.trigger_notification(ctx, message)
+               }
+        	
           await ctx.stub.putState(contractId, Buffer.from(serialize(contract)))
           return {successful: true}
         } else {
@@ -1295,6 +1916,7 @@ def String compileInitMethod(Model model) {
           switch base.ontologyType.name {
             case 'Asset': assets.add(domainType as RegularType)
             case 'Event': events.add(domainType as RegularType)
+            case 'DataTransfer': events.add(domainType as RegularType)
             case 'Role': roles.add(domainType as RegularType)
           }
         }
@@ -1419,6 +2041,7 @@ def String compileInitMethod(Model model) {
 	
  
 def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
+	
     val file = '''
       {
         "name": "«model.contractName.toLowerCase»",
@@ -1438,9 +2061,10 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
         "engineStrict": true,
         "author": "Symboleo2SC",
         "dependencies": {
-          "fabric-contract-api": "^2.2.2",
-          "fabric-shim": "^2.2.2",
-          "symboleo-js-core": "^1.0.12"
+          "fabric-contract-api": "2.2.0",
+          "fabric-shim": "2.2.0",
+          "flatted": "^3.3.3",
+          "symboleoac-js-core": "^1.0.23"
         },
         "devDependencies": {
           "chai": "^4.1.2",
@@ -1530,7 +2154,8 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
     const { Event } = require(«EVENTS_CLASS_IMPORT_PATH»)
     const { Power } = require(«POWER_CLASS_IMPORT_PATH»)
     const { ACPolicy } = require(«ACPolicy_CLASS_IMPORT_PATH»)
-    
+    const { DataTransfer } = require("symboleoac-js-core")
+      
     let contract = null
     
     function deserialize(data) {
@@ -1605,7 +2230,7 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                   		}
                                   
                 }else{//return objects that does not have name 
-                  if(contract[object[key][eKey]] !=  undefined){
+                  if(contract[key] !=  undefined){
                                   contract[key][eKey] = object[key][eKey]
                                 }
                 }
@@ -1614,7 +2239,7 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
             }
              
             }else{//string/numerical and so on 
-              if(contract[object[key][eKey]] !=  undefined){
+              if(contract[key] !=  undefined){
                             contract[key][eKey] = object[key][eKey]
                   }
               }
@@ -1704,7 +2329,7 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                       contract[key].addController(reviverList(valuet)) 
                  
                     }//for Event
-                    if(contract[key] instanceof Event){
+                    if(contract[key] instanceof Event || (contract[key] instanceof DataTransfer)){
                       contract[key]._performer = []
                       for(const valuet of object[key]._performer) {
                       	contract[key].addPerformer(reviverList(valuet)) 
@@ -1895,12 +2520,18 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                  «generateLegalpositionCondition(obligation.antecedent,"contract."+obligation.name+"Situation.addAntecedentOf(")» 
                 «ENDIF»
                  contract.obligations.«obligation.name» = new Obligation('«obligation.name»', «generateDotExpressionString(obligation.creditor, 'contract')», «generateDotExpressionString(obligation.debtor, 'contract')», contract, contract.«obligation.name»Situation)
-                 «getSpecifiedControllerObligation(obligation)»
+                 «getSpecifiedControllerObligation(obligation,"contract")»
                  «getSpecifiedRulesCondObligation(obligation, model)»
                 if («obligation.antecedent instanceof PAtomPredicateTrueLiteral ? "true" : "!isNewInstance "» ) { «"\n"+generatePropositionAssignString(obligation.antecedent)»
                   contract.obligations.«obligation.name».trigerredUnconditional()
+                  let transitionState = contract.obligations.«obligation.name».state;
                   if (!isNewInstance && «generatePropositionString(obligation.consequent)») { «"\n"+generatePropositionAssignString(obligation.consequent)»
                     contract.obligations.«obligation.name».fulfilled()
+                    «var obName = "contract.obligations."+obligation.name»
+                    let controllers = contract.obligations.«obligation.name»._controller
+               		//notify
+               		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+               		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
                   }
                 } else {
                   contract.obligations.«obligation.name».trigerredConditional()
@@ -1914,13 +2545,22 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
             if («generatePropositionString(obligation.trigger)») { «"\n"+generatePropositionAssignString(obligation.trigger)»
               if (contract.survivingObligations.«obligation.name» == null || contract.survivingObligations.«obligation.name».isFinished()) {
                 contract.survivingObligations.«obligation.name» = new Obligation('«obligation.name»', «generateDotExpressionString(obligation.creditor, 'contract')», «generateDotExpressionString(obligation.debtor, 'contract')», contract, true)
-                 «getSpecifiedControllerObligation(obligation)»
+                 «getSpecifiedControllerObligation(obligation,"contract")»
                  «getSpecifiedRulesCondObligation(obligation, model)»
                 if («generatePropositionString(obligation.antecedent)») { «"\n"+generatePropositionAssignString(obligation.antecedent)»
                   contract.survivingObligations.«obligation.name».trigerredUnconditional()
+                  //AC
+                  let transitionState = contract.survivingObligations.«obligation.name».state;
                   «obligation.consequent instanceof PAtomPredicate ? "" : " if ( !isNewInstance &&" + generatePropositionString(obligation.antecedent)+")" »
                   if («generatePropositionString(obligation.consequent)» ) { «"\n"+generatePropositionAssignString(obligation.consequent)»
                     contract.survivingObligations.«obligation.name».fulfilled()
+                    //AC
+                    «var obName = "contract.survivingObligations."+obligation.name»
+                    let controllers = contract.survivingObligations.«obligation.name»._controller
+                    //notify
+                     let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+                     contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()})         
+                    
                   }
                 } else {
                   contract.survivingObligations.«obligation.name».trigerredConditional()
@@ -1939,11 +2579,11 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                            «IF !(power.antecedent instanceof PAtomPredicateTrueLiteral)»
                 «generateLegalpositionCondition(power.antecedent,"contract."+power.name+"Situation.addAntecedentOf(")» 
                            «ENDIF»
-                            	this.«power.name»Situation.addConsequentOf({_type: 'stateCondition',«compilePowerCondition(power.consequent)»})
+                contract.«power.name»Situation.addConsequentOf({_type: 'stateCondition',«compilePowerCondition(power.consequent)»})
                 contract.powers.«power.name» = new Power('«power.name»', «generateDotExpressionString(power.creditor, 'contract')», «generateDotExpressionString(power.debtor, 'contract')», contract, contract.«power.name»Situation)
                 effects.powerCreated = true
                 effects.powerName = '«power.name»'
-                «getSpecifiedControllerPower(power)»
+                «getSpecifiedControllerPower(power,"contract")»
                 «getSpecifiedRulesCondPower(power, model)»
                 if («power.antecedent instanceof PAtomPredicateTrueLiteral ? "true" : "!isNewInstance && "+generatePropositionString(power.antecedent) » ) { «"\n"+generatePropositionAssignString(power.antecedent)»
                   contract.powers.«power.name».trigerredUnconditional()
@@ -1960,7 +2600,16 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
             if (contract.obligations.«obligation.name» != null && («generatePropositionString(obligation.antecedent)»)) { «"\n"+generatePropositionAssignString(obligation.antecedent)»
               contract.obligations.«obligation.name».activated()
                             if («generatePropositionString(obligation.consequent)») { «"\n"+generatePropositionAssignString(obligation.consequent)»
+                              //AC
+                              let transitionState = contract.obligations.«obligation.name».state;
                               contract.obligations.«obligation.name».fulfilled()
+                              //AC
+                              let controllers = contract.obligations.«obligation.name»._controller
+                              «var obName = "contract.obligations."+obligation.name»
+                         		//notify
+                         		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+                         		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                              
                             }
                           }
                         },
@@ -1970,7 +2619,13 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                           if (contract.survivingObligations.«obligation.name» != null  && («generatePropositionString(obligation.antecedent)»)  ) { «"\n"+generatePropositionAssignString(obligation.antecedent)»
                             contract.survivingObligations.«obligation.name».activated()
                             if («generatePropositionString(obligation.consequent)») { «"\n"+generatePropositionAssignString(obligation.consequent)»
+                              let transitionState = contract.survivingObligations.«obligation.name».state;
                               contract.survivingObligations.«obligation.name».fulfilled()
+                              let controllers = contract.survivingObligations.«obligation.name»._controller
+                              «var obName = "contract.survivingObligations."+obligation.name»
+                         		//notify
+                         		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+                         		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
                             }
                           }
                         },
@@ -1985,14 +2640,29 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                       «FOR obligation : obligationFullfilmentEvents.keySet»
                         fulfillObligation_«obligation.name»(contract) {
                           if (contract.obligations.«obligation.name» != null && («generatePropositionString(obligation.consequent)») ) { «"\n"+generatePropositionAssignString(obligation.consequent)»
+                            let transitionState = contract.obligations.«obligation.name».state;
                             contract.obligations.«obligation.name».fulfilled()
+                              let controllers = contract.obligations.«obligation.name»._controller
+                              «var obName = "contract.obligations."+obligation.name»
+                         		//notify
+                         		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+                         		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                            
                           }
                         },
                       «ENDFOR»
                       «FOR obligation : survivingObligationFullfilmentEvents.keySet»
                         fulfillSurvivingObligation_«obligation.name»(contract) {
                           if (contract.survivingObligations.«obligation.name» != null && «generatePropositionString(obligation.consequent)» ) { «"\n"+generatePropositionAssignString(obligation.consequent)»
+                            let transitionState = contract.survivingObligations.«obligation.name».state;
                             contract.survivingObligations.«obligation.name».fulfilled()
+                            //AC
+	                          let controllers = contract.survivingObligations.«obligation.name»._controller
+	                          «var obName = "contract.survivingObligations."+obligation.name»
+	                     		//notify
+	                     		let MSG= transitionState+" Changed to "+«obName».state+","+«obName».name+", " + «obName».contract.id;
+	                     		contract.notified.message.push({name: '«obName»', message: MSG, roles:contract.accessPolicy.permissionValid(«obName»,[«obName».creditor,«obName».debtor],«obName».getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                            
                           }
                         },
                       «ENDFOR»
@@ -2010,15 +2680,39 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                           }
                         }
                         contract.fulfilledActiveObligations()
+                        // if all the obligations are fullfilled (this include the notification on their functions in the listner in events) so the contract will be terminate successfully. Then
+                        // the roles must be notified by only contract state
+                        // contract notification
+                        let controllers = contract._controller
+                   		//notify
+                   		let MSG= " Contract "+contract.name+" is Successfully Terminated,"+", " + contract.id;
+                   		contract.notified.message.push({name: contract.name, message: MSG, roles:contract.accessPolicy.permissionValid(contract,controllers,contract.getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
                       },
                       unsuccessfullyTerminateContract(contract) {
                         for (let index in contract.obligations) {
                           contract.obligations[index].terminated({emitEvent: false})
+                          let obl=contract.obligations[index]
+                            let controllers = obl._controller
+  	                 	  //notify
+  	                 	  let MSG= " Power "+obl.name+" is "+obl.state+ " because contract is terminated unsuccessfully,"+", " + obl.contract.id;
+  	                 	  contract.notified.message.push({name: obl.name, message: MSG, roles:contract.accessPolicy.permissionValid(obl,controllers,obl.getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                                                   
                         }
                         for (let index in contract.powers) {
                           contract.powers[index].terminated()
+                          let power=contract.powers[index]
+                          let controllers = power._controller
+	                 	  //notify
+	                 	  let MSG= " Power "+power.name+" is "+power.state+ " because contract is terminated unsuccessfully,"+", " + power.contract.id;
+	                 	  contract.notified.message.push({name: power.name, message: MSG, roles:contract.accessPolicy.permissionValid(power,controllers,power.getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                          
                         }
                         contract.terminated()
+                        let controllers = contract._controller
+                   		//notify
+                   		let MSG= " Contract "+contract.name+" is Unsuccessfully Terminated,"+", " + contract.id;
+                   		contract.notified.message.push({name: contract.name, message: MSG, roles:contract.accessPolicy.permissionValid(contract,controllers,contract.getController(controllers.length - 1), contract) , time: new Date().toISOString()}) 
+                        
                       }     
                     }
                     
@@ -2178,17 +2872,17 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                     PAtomRecursive:
                       return "(" + generateLegalpositionCondition(proposition.inner, addAC) + ")"
                     NegatedPAtom:
-                      return "!(" + generateLegalpositionCondition(proposition.negated, addAC) + ")"
+                      return generateLegalpositionCondition(proposition.negated, addAC) 
                     PAtomPredicate:
                       return "\n"+addAC+generatePredicateFunctionCondition(proposition.predicateFunction)+")\n"
                     PAtomEnum:
                       return proposition.enumeration.name + "." + proposition.enumItem.name
                     PAtomVariable:
-                      return generateDotExpressionString(proposition.variable, 'this')
+                      return generateDotExpressionString(proposition.variable, 'contract')
                     PAtomPredicateTrueLiteral:
-                      return "true"
+                      return " "
                     PAtomPredicateFalseLiteral:
-                      return "false"
+                      return " "
                     PAtomDoubleLiteral:
                       return proposition.value.toString
                     PAtomIntLiteral:
@@ -2254,7 +2948,7 @@ def String generateEventVariableCondition(Event event) {
     if (ref instanceof VariableRef) {
       for (v : eventVariables) {
       	if ( (ref as VariableRef).variable == v.name) { ids= v.type.name}
-      //System.out.print("eventVariables%%%"+v.name+ v.type.name)}
+      ////System.out.print("eventVariables%%%"+v.name+ v.type.name)}
     }
     }
     return ids
@@ -2305,12 +2999,12 @@ def String generateEventVariableCondition(Event event) {
                     obligationFullfilmentEvents.clear()
                     survivingObligationFullfilmentEvents.clear()
               	
-              	  System.out.println('generate2SCSource: ' + e.contractName)
+              	  //System.out.println('generate2SCSource: ' + e.contractName)
                     var symboleo2SC = new Symboleo2SC()
-                    System.out.println('generateHFSource: ' + e.contractName)
+                    //System.out.println('generateHFSource: ' + e.contractName)
                     symboleo2SC.generateHFSource(fsa, e)
                     
-                    System.out.println('generatePCSource: ' + e.contractName)
+                    //System.out.println('generatePCSource: ' + e.contractName)
                     var symboleoPC = new SymboleoPCGenerator()
                     symboleoPC.generatePCSource(fsa, e)
                     

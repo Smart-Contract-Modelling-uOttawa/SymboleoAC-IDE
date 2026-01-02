@@ -80,7 +80,7 @@ BaseType:
 
 
 OntologyType:
-	name=("Asset" | "Event" | "Role" | "Contract" | "DataTransfer" ); //
+	name=("Asset" | "Event" | "Role" | "Contract" | "DataTransfer" ); 
 
 //AC
 AResource:

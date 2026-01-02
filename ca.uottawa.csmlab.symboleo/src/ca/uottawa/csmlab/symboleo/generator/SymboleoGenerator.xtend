@@ -138,20 +138,20 @@ import org.eclipse.emf.ecore.EObject
 
 class SymboleoGenerator extends AbstractGenerator {
  
-  val ASSET_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val EVENT_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ROLE_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val POWER_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val OBLIGATION_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ACPolicy_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val ATTRIBUTE_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Rule_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Resource_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val Operation_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val CONTRACT_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val EVENTS_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val PREDICATES_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
-  val UTILS_CLASS_IMPORT_PATH = "\"symboleo-js-core\""
+  val ASSET_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val EVENT_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ROLE_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val POWER_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val OBLIGATION_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ACPolicy_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val ATTRIBUTE_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Rule_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Resource_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val Operation_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val CONTRACT_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val EVENTS_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val PREDICATES_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
+  val UTILS_CLASS_IMPORT_PATH = "\"symboleoac-js-core\""
  
   val assets = new ArrayList<RegularType>
   val events = new ArrayList<RegularType>
@@ -657,7 +657,7 @@ def String survivEvent(String e ){
       obligationFullfilmentEvents.clear()
       survivingObligationFullfilmentEvents.clear()
 	  System.out.println('generate2SCSource: ' + e.contractName)
-      var symboleo2SC = new Symboleo2SC()
+      var symboleo2SC = new Symboleo2SC() 
       System.out.println('generateHFSource: ' + e.contractName)
       symboleo2SC.generateHFSource(fsa, e)
       System.out.println('generatePCSource: ' + e.contractName)
