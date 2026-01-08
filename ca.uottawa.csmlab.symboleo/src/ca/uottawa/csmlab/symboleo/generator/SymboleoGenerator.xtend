@@ -193,69 +193,8 @@ class SymboleoGenerator extends AbstractGenerator {
   val parameters = new ArrayList<Parameter>
   val variables = new ArrayList<Variable>
   val AssignVar= new ArrayList<String>
-//common May help 
-  def String generateEventMapLineString(List<PAtomPredicate> predicates, String listenerName) {
-    val line = new StringBuilder()
-    line.append('[[')
-    for (predicate : predicates) {
-      val pf = predicate.predicateFunction
-      switch (pf) {
-        PredicateFunctionHappens: line.append(generateInternalEventObjectString(pf.event) + ', ')
-        PredicateFunctionWHappensBefore: line.append(generateInternalEventObjectString(pf.event) + ', ')
-        PredicateFunctionHappensAfter: line.append(generateInternalEventObjectString(pf.event) + ', ')
-        PredicateFunctionSHappensBefore: {
-          line.append(generateInternalEventObjectString(pf.event) + ', ')
-          val res = generatePointInternalEventObjectString(pf.point.pointExpression)
-          if (res !== null){
-            line.append(res + ', ') 
-          }  
-        }
-        PredicateFunctionHappensWithin: {
-          line.append(generateInternalEventObjectString(pf.event) + ', ')
-          val interval = pf.interval.intervalExpression
-          switch(interval){
-            IntervalFunction: {
-              val res1 = generatePointInternalEventObjectString(interval.arg1)
-              val res2 = generatePointInternalEventObjectString(interval.arg2)              
-              if (res1 !== null) {
-                line.append(res1 + ', ') 
-              }
-              if (res2 !== null) {
-                line.append(res2 + ', ') 
-              } 
-            }
-          }
-        }
-        PredicateFunctionAssignment: {
- 
-            
- 
-        	line.append(generateInternalEventObjectString(pf.event) + ', ')
- 
-         	//line.append(generateAssignObjectString(pf.assignment) + ',')
- 
-        	} // To write in the getEventMap. writing delivered/event before the assignment expression only
-      }
-    }
-if (line.toString() !='[['){
- 
-    line.append('''], «listenerName»],''')
- 
-    return line.toString
- 
-    }
-    else return ""
- 
-  }
-//common
-  def String generateInternalEventObjectString(Event event) {
-    switch (event) {
-      VariableEvent: return '''new InternalEvent(InternalEventSource.contractEvent, InternalEventType.contractEvent.Happened, «generateDotExpressionString(event.variable, 'contract')»)'''
-      ObligationEvent: return '''new InternalEvent(InternalEventSource.obligation, InternalEventType.obligation.«event.eventName», contract.«isSurvivingObligation(event.obligationVariable.name) ? "survivingObligations" : "obligations"».«event.obligationVariable.name»)'''
-      ContractEvent: return '''new InternalEvent(InternalEventSource.contract, InternalEventType.contract.«event.eventName», contract)'''
-      PowerEvent: return '''new InternalEvent(InternalEventSource.power, InternalEventType.power.«event.eventName», contract.powers.«event.powerVariable.name»)'''
-    }
-  }
+
+
 //common
   def String generateOAssignObjectString(List<OAssignment> a) {
  
@@ -298,39 +237,7 @@ if (line.toString() !='[['){
  
   	return s
   }
-  //common
-  def String generatePointInternalEventObjectString(PointExpression p) {
-    switch (p) {
-      PointFunction: {
-        val res = generatePointInternalEventObjectString(p.arg)
-        if(res !== null) {
-          return res
-        } else {
-          return null
-        }
-      }
-      PointAtomParameterDotExpression: {
-        if(Helpers.isDotExpressionTypeOfEvent(p.variable, variables, parameters)) {
-          return '''new InternalEvent(InternalEventSource.contractEvent, InternalEventType.contractEvent.Happened, «generateDotExpressionString(p.variable, 'contract')»)'''
-        } else {
-          return null
-        }
-      }
-      PointAtomObligationEvent: {
-        val e = p.obligationEvent as ObligationEvent
-        return '''new InternalEvent(InternalEventSource.obligation, InternalEventType.obligation.«e.eventName», contract.«isSurvivingObligation(e.obligationVariable.name) ? "survivingObligations" : "obligations"».«e.obligationVariable.name»)'''
-      }
-      PointAtomContractEvent: {
-        val e = p.contractEvent as ContractEvent
-        return '''new InternalEvent(InternalEventSource.contract, InternalEventType.contract.«e.eventName», contract)'''  
-      }
-      PointAtomPowerEvent: {
-        val e = p.powerEvent as PowerEvent
-        return '''new InternalEvent(InternalEventSource.power, InternalEventType.power.«e.eventName», contract.powers.«e.powerVariable.name»)'''
-      }
-    }
-  }
- 
+  
 //common
   def List<PAtomPredicate> collectPropositionEvents(Proposition proposition) {
     val list = new ArrayList<PAtomPredicate>
@@ -389,36 +296,7 @@ if (line.toString() !='[['){
     }
   }
  
-  def String generateEventVariableString(Event event) {
-    switch (event) {
-      VariableEvent: return generateDotExpressionString(event.variable, 'contract')
-      PowerEvent: return '''contract.powers.«event.powerVariable.name» && contract.powers.«event.powerVariable.name»._events.«event.eventName»'''
-      ObligationEvent: return '''contract.«isSurvivingObligation(event.obligationVariable.name) ? "survivingObligations" : "obligations"».«event.obligationVariable.name» && contract.«isSurvivingObligation(event.obligationVariable.name) ? "survivingObligations" : "obligations"».«event.obligationVariable.name»._events.«event.eventName»'''
-      ContractEvent: return '''contract._events.«event.eventName»'''
-    }
-  }
  
-  def String generatePredicateFunctionString(PredicateFunction predicate) {
- 
-    switch (predicate) {
- 
-      PredicateFunctionHappens: return '''Predicates.happens(«generateEventVariableString(predicate.event)») '''
- 
-      PredicateFunctionHappensAfter: return '''Predicates.happensAfter(«generateEventVariableString(predicate.event)», «generatePointExpresionString(predicate.point.pointExpression)»)'''
- 
-      PredicateFunctionWHappensBefore: return '''Predicates.weakHappensBefore(«generateEventVariableString(predicate.event)», «generatePointExpresionString(predicate.point.pointExpression)») '''
- 
-      PredicateFunctionSHappensBefore: return '''Predicates.strongHappensBefore(«generateEventVariableString(predicate.event)», «generatePointExpresionString(predicate.point.pointExpression)») '''
- 
-      PredicateFunctionHappensWithin: return '''Predicates.happensWithin(«generateEventVariableString(predicate.event)», «generateIntervalExpresionArgString(predicate.interval.intervalExpression)») '''
- 
-      PredicateFunctionAssignment: return '''Predicates.happens(«generateEventVariableString(predicate.event)») '''
- 
-       PredicateFunctionAssignmentOnly: return '''true'''
- 
-    }
- 
-  }
  
 	def String generatePredicateAssignString(PredicateFunction predicate) {
 	    switch (predicate) {
@@ -429,31 +307,7 @@ if (line.toString() !='[['){
 	  }
  
  
-  def String generatePointExpresionString(PointExpression point) {
-    switch (point) {
-      PointFunction: return '''Utils.addTime(«generatePointExpresionString(point.arg)», «generateTimeValueString(point.value)», "«point.timeUnit»")'''
-      PointAtomParameterDotExpression: {
-        if (Helpers.isDotExpressionTypeOfEvent(point.variable, variables, parameters)) {
-          return '''«generateDotExpressionString(point.variable, 'contract')»._timestamp'''
-        } else {
-          return generateDotExpressionString(point.variable, 'contract')
-        }
-      }
-      PointAtomObligationEvent: {
-        val e = point.obligationEvent as ObligationEvent
-        val obligationRef = isSurvivingObligation(e.obligationVariable.name) ? "survivingObligations" : "obligations"        
-        return '''contract.«obligationRef».«e.obligationVariable.name» && contract.«obligationRef».«e.obligationVariable.name»._events.«e.eventName» && contract.«obligationRef».«e.obligationVariable.name»._events.«e.eventName»._timestamp'''
-      }
-      PointAtomPowerEvent: {
-        val e = point.powerEvent as PowerEvent
-        return '''contract.powers.«e.powerVariable.name» && contract.powers.«e.powerVariable.name»._events.«e.eventName» && contract.powers.«e.powerVariable.name»._events.«e.eventName»._timestamp'''
-      }
-      PointAtomContractEvent: {
-        val e = point.contractEvent as ContractEvent
-        return '''contract._events.«e.eventName» && contract._events.«e.eventName»._timestamp'''
-      }
-    }
-  }
+  
   def String generateTimeValueString(Timevalue tv) {
     switch (tv) {
       TimevalueInt: return tv.value.toString
@@ -462,20 +316,7 @@ if (line.toString() !='[['){
   }
  
  
-  def String generateIntervalExpresionArgString(IntervalExpression interval) {
-    switch (interval) {
-      IntervalFunction:
-        return '''«generatePointExpresionString(interval.arg1)», «generatePointExpresionString(interval.arg2)»'''
-      SituationExpression: {
-        val situation = interval.situation
-        switch (situation) {
-          ObligationState: return '''contract.«isSurvivingObligation(situation.obligationVariable.name) ? "survivingObligations" : "obligations"».«situation.obligationVariable.name», "Obligation.«situation.stateName»"'''
-          PowerState: return '''contract.powers.«situation.powerVariable.name», "Power.«situation.stateName»""'''
-          ContractState: return '''contract, "Contract.«situation.stateName»"'''
-        }
-      }
-    }
-  }
+
  
  
   def String generateExpressionString(Expression argExpression, String thisString) {
@@ -582,41 +423,7 @@ if (line.toString() !='[['){
     }
   }
  
-	 def boolean isSurvivingObligation (String name) {
-	    for (obligation: allObligations){
-	      if(obligation.name.equals(name)){
-	        return false
-	      }
-	    }
-	    for (obligation: allSurvivingObligations){
-	      if(obligation.name.equals(name)){
-	        return true
-	      }
-	    }
-    }
-def String survivEvent(String e ){
-	var survive=false
-	var related=false
-	for(line: arrays){
-		if (line.contains("contract."+e) && (line.contains('EventListeners.fulfillSurvivingObligation') ||
-      	             	line.contains("EventListeners.createSurvivingObligation") ||
-     	             line.contains("EventListeners.activateSurvivingObligation")  )) {
-     	             	survive=true
-     	             }
-     	 if (line.contains("contract."+e) && (line.contains('EventListeners.fulfillObligation') ||
-      	             	line.contains("EventListeners.createObligation") ||
-     	             line.contains("EventListeners.activateObligation") ||
-     	             line.contains("EventListeners.createPower" ) ||
-     	              line.contains("EventListeners.activatePower") ||
-     	              line.contains('EventListeners.fulfillPower'))) {
-     	             	related=true
-     	             }	             
-	}
-	if (survive && !related){
-		return " || contract.isSuccessfulTermination() || contract.isUnsuccessfulTermination()"
-	} else
-	return "" 	
-}
+
  
  
   override void doGenerate(Resource resource, IFileSystemAccess2 fsa, IGeneratorContext context) {
@@ -657,7 +464,7 @@ def String survivEvent(String e ){
       obligationFullfilmentEvents.clear()
       survivingObligationFullfilmentEvents.clear()
 	  System.out.println('generate2SCSource: ' + e.contractName)
-      var symboleo2SC = new Symboleo2SC() 
+      var symboleo2SC = new Symboleo2SC()
       System.out.println('generateHFSource: ' + e.contractName)
       symboleo2SC.generateHFSource(fsa, e)
       System.out.println('generatePCSource: ' + e.contractName)

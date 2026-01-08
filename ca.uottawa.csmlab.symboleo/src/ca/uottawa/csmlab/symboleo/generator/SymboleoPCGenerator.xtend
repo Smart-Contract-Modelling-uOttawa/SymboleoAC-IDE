@@ -402,7 +402,7 @@ class SymboleoPCGenerator extends SymboleoGenerator {
 		}
 	}
 	
-	override def String generateEventVariableString(Event event){
+	 def String generateEventVariableString(Event event){ //override
 
 		switch (event){
 
