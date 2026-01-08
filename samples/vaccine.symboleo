@@ -1,0 +1,158 @@
+Domain covidVaccineProcurementD
+	Manufacturer isA Role with name: String, org: String, dept: String;
+	Government isA Role with name: String, org: String, dept: String;
+	Regulator isA Role thirdParty with name: String, org: String, dept: String;
+	Admin isA Role thirdParty with name: String, org: String, dept: String;
+	WorldCourier isA Role thirdParty with name: String, org: String, dept: String;
+	FDA isA Role thirdParty with name: String, org: String, dept: String;
+	Invoiced isA Event with Env reqID : String, Env noOfDoses : Number, Env date : Date,  performer: Government, controller: Government;
+	Paid isA Event with Env reqID : String, Env amount : Number, performer: Government, controller: Government;
+	Requested isA Event with Env reqID : String, Env dosage : Number, Env date : Date, performer: Government, controller: Government;
+	LeadtimeInformedNegotiated isA Event with Env reqID : String, Env date : Date, performer: Manufacturer, controller: Manufacturer;
+	NotifiedOfDelivery isA Event with Env reqID : String, Env delD : Date, performer: Manufacturer, controller: Manufacturer;
+	Location isAn Enumeration(Ottawa, Toronto, Montrial, Vancover);
+	Confirmed isA Event with Env reqID : String, Env shipToLocation: Location, performer: Government, controller: Government;
+	Delivered isA Event with Env reqID : String, Env dosage : Number, Env delAddr : Location, Env date: Date, performer: WorldCourier, controller: Manufacturer;
+	VaccineDose isA Asset with  price : Number, FDAapproval : Boolean, owner: Manufacturer;
+	StopWork isA Event with performer: Government, controller: Government;
+	//thirdParty stopWork
+	ThirdPartyStopWork isA Event with performer: Regulator, controller: Regulator;
+	Agreed isA Event with Env reqID: String, performer: Government, controller: Government;
+	Risk isA Event with Env reqID: String, Env extendedDel: Date, performer: Manufacturer, controller: Manufacturer;
+	Remain isA Asset with value:Number, owner: Government;
+	PaidAmount isA Asset with value:Number, owner: Government;
+	WithdrewApproval isA Event with performer: FDA, controller: FDA;
+	TerminateAgreementG isA Event with performer: Government, controller: Government;
+	TerminateAgreementM isA Event with performer: Manufacturer, controller: Manufacturer;
+	Alert isA DataTransfer with Env value: Number, Env sensorTimestamp:String, condition: String, window: Number, count: Number, Env reqID : String, controller:Manufacturer, performer:Regulator;
+		
+endDomain
+ 
+TimeGranularity is days 
+Contract VaccineProcurementC (pfizerP :Manufacturer, mcdcP:Government, regulatorP: Regulator, adminP: Admin, fdaP: FDA, worldcourierP: WorldCourier,
+approval : Boolean, unitPrice : Number, minQuantity : Number, maxQuantity:Number)
+ 
+Declarations
+    regulator: Regulator with name:= regulatorP.name, org:= regulatorP.org, dept:= regulatorP.dept;
+    admin: Admin with name:= adminP.name, org:= adminP.org, dept:= adminP.dept;
+    pfizer: Manufacturer with name:= pfizerP.name, org:= pfizerP.org, dept:= pfizerP.dept;
+    mcdc: Government with name:= mcdcP.name, org:= mcdcP.org, dept:= mcdcP.dept;
+    fda: FDA with name:= fdaP.name, org:= fdaP.org, dept:= fdaP.dept;
+    worldcourier: WorldCourier with name:= worldcourierP.name, org:= worldcourierP.org, dept:= worldcourierP.dept;
+    
+ 
+	requested : Requested  with performer:= mcdc, controller:= mcdc;
+	leadtimeINform : LeadtimeInformedNegotiated  with performer:= pfizer, controller:= pfizer;
+	notifiedOD : NotifiedOfDelivery  with performer:= pfizer, controller:= pfizer;
+	delivered : Delivered  with performer:= worldcourier, controller:= pfizer;
+	invoiced : Invoiced with performer:= mcdc, controller:= mcdc;
+	paid : Paid with performer:= mcdc, controller:= mcdc;
+	confirmed: Confirmed with performer:= mcdc, controller:= mcdc;
+	lawStopWork: StopWork with performer:= mcdc, controller:= mcdc;
+	regulationStopWork:ThirdPartyStopWork with performer:= regulator, controller:= regulator;
+	judicialStopWork:ThirdPartyStopWork with performer:= regulator, controller:= regulator;
+	adminStopWork: ThirdPartyStopWork with performer:= regulator, controller:= regulator;
+	govStopWork: StopWork with performer:= mcdc, controller:= mcdc;
+	vaccineDose : VaccineDose with  price := unitPrice, FDAapproval := approval, owner:=pfizer;
+	agreedFromG: Agreed with performer:= mcdc, controller:= mcdc;
+    outsideRisk: Risk with performer:= pfizer, controller:= pfizer;
+    remain: Remain with value:= maxQuantity, owner:=mcdc;
+    paidAmount:PaidAmount with value:=0, owner:=mcdc;
+    withdrewApproval: WithdrewApproval  with performer:= fda, controller:= fda;
+    mcdcTerminateAgreement: TerminateAgreementG with performer:= mcdc, controller:= mcdc;
+    pfizerTerminateAgreement: TerminateAgreementM with performer:= pfizer, controller:= pfizer;
+    //sensors
+    temperature: Alert with condition := "value > -80", window := 10, count := 5, controller := pfizer, performer := regulator;
+    humidity : Alert with condition := "value > 70", window := 15, count := 3, controller := pfizer, performer := regulator;
+    shock : Alert with condition := "value > 2.5",  window := 5, count := 1, controller := pfizer, performer := regulator;
+    lightExposure : Alert with condition := "value > 0",  window := 1, count := 1, controller := pfizer, performer := regulator;
+    sealOpen : Alert with condition := "value == 1", window := 1,  count := 1, controller := pfizer, performer := regulator;
+    
+    
+ 
+Preconditions
+vaccineDose.FDAapproval==true;
+ 
+ 
+Obligations
+    // to keep the contract in active state until the remain doses is less than the minimum requested quantity (end of performance) and the mcdc and pfizer terminate the agreement
+	oRequestVaccineDosage: O(mcdc, pfizer, true, (remain.value< minQuantity)
+		                     and Happens(Fulfilled(obligations.oAgreedOnRequest))
+							 and Happens(Fulfilled(obligations.oDeliver)) and Happens(Fulfilled(obligations.oAssign))
+							 and  Happens(mcdcTerminateAgreement) and Happens(pfizerTerminateAgreement)
+	); //3.2
+	// A Request must satisfy all the conditions required in a particular order
+	oAgreedOnRequest: Happens(requested)-> O(mcdc,pfizer,Happens(agreedFromG),
+		                ShappensBefore(leadtimeINform,agreedFromG)
+						and leadtimeINform.reqID==requested.reqID and agreedFromG.reqID==requested.reqID
+						and (requested.dosage >= minQuantity and requested.dosage<=remain.value)
+						);	
+	// A delivery obligation is achieved if the delivering operation satisfies all the conditions required in a particular order
+	//and (delivered.temperature <= temperature) // and Happens(Fulfilled(obligations.oMonitorColdChain))
+	oDeliver: Happens(requested)->O(pfizer,mcdc, Happens(Fulfilled(obligations.oAgreedOnRequest))
+		         and Happens(confirmed),
+		        ShappensBefore(notifiedOD,confirmed)
+		        and Happens(delivered)
+				 and  delivered.delAddr==confirmed.shipToLocation
+				and vaccineDose.FDAapproval==true
+				and delivered.reqID==requested.reqID
+				and notifiedOD.reqID==requested.reqID and confirmed.reqID==requested.reqID
+				and ((delivered.date==notifiedOD.delD) or 
+					   (Happens(outsideRisk) and delivered.date==outsideRisk.extendedDel and requested.reqID==outsideRisk.reqID))
+				      and  (not Happens(temperature) or temperature.reqID !=requested.reqID) 
+				      and  (not Happens(sealOpen) or sealOpen.reqID != requested.reqID) 
+				      and  (not Happens(humidity) or humidity.reqID!=requested.reqID) 
+				      and  (not Happens(shock) or shock.reqID != requested.reqID)
+				     and  (not Happens(lightExposure) or lightExposure.reqID != requested.reqID) );
+				     
+	// Calculate the remains of the doses and the price of the doses delivered when the required doses are delivered, fulfilling all the agreed-upon conditions 											
+	oAssign: Happens(requested)->O(mcdc,pfizer,Happens(delivered) and delivered.reqID==requested.reqID,
+				   HappensAssign(Fulfilled(obligations.oDeliver), remain.value:=remain.value-delivered.dosage; paidAmount.value:=delivered.dosage * vaccineDose.price )
+				   and delivered.reqID==requested.reqID
+				);
+				
+	//		
+	//oMonitorColdChain:  (Happens(temperature) or Happens(sealOpen) or Happens(humidity) or Happens(shock) or Happens(lightExposure)) -> O(regulator, pfizer, true,
+    //false);
+						
+Surviving Obligations
+  
+//Checking the agreed terms necessary to activate and complete the payment process
+	oPay: Happens(requested)-> Obligation(mcdc, pfizer,Happens(invoiced) and vaccineDose.FDAapproval==true and invoiced.reqID==requested.reqID and Happens(Fulfilled(obligations.oDeliver)) and ShappensBefore(delivered,invoiced),
+			ShappensBefore(paid, Date.add(invoiced.date , 30, days))
+			and delivered.reqID==requested.reqID
+			and invoiced.reqID==requested.reqID  
+			and invoiced.reqID==paid.reqID
+			and paid.amount == paidAmount.value
+			)	;	
+// FDA approval monitoring where mcdc must pay for vaccine doses already approved by FDA					
+	oWithdrewApproval: O(pfizer, mcdc,Happens(withdrewApproval),
+				   Assign(vaccineDose.FDAapproval:=false; vaccineDose.FDAapproval:=true; invoiced.reqID:=45 )
+				);								
+Powers
+// mcdc has the power to stop the work if one of the following four events occurs
+	pStopWork: Happens(lawStopWork) or Happens(adminStopWork) or Happens(regulationStopWork) or Happens(judicialStopWork) ->
+					P(mcdc, pfizer, Happens(govStopWork), Terminated(self));
+// Terminate the contract at the end of the performance
+	pTermination: Happens(Fulfilled(obligations.oRequestVaccineDosage)) -> P(pfizer,mcdc, true, Terminated(self));
+	
+//Future work, if we add attributes to legal position class to holds legal position instance id
+	//pMonitorColdChain:  Happens(requested) and (Happens(temperature) or Happens(sealOpen) or Happens(humidity) or Happens(shock) or Happens(lightExposure)) -> P(regulator, pfizer, temperature.reqID==requested.reqID
+			//and sealOpen.reqID==requested.reqID  
+			//and humidity.reqID==requested.reqID
+			//and shock.reqID == requested.reqID
+			//and lightExposure.reqID == requested.reqID, Suspended(obligations.oDeliver));
+ 
+ACPolicy with Controller regulator
+Rule1: Grant read To mcdc On vaccineDose by pfizer; // give read permission to government to read information vaccineDose
+Rule2: Grant read To worldcourier On vaccineDose.FDAapproval by pfizer;
+Rule3: Grant read To mcdc On delivered by pfizer;
+Rule4: Revoke write To pfizer On temperature.value by regulator; // we took the right of controller to write (constaints)
+Rule5: Revoke write To pfizer On humidity.value by regulator;
+Rule6: Revoke write To pfizer On shock.value by regulator;
+Rule7: Revoke write To pfizer On lightExposure.value by regulator;
+Rule8: Revoke write To pfizer On sealOpen.value by regulator;
+ 
+ 
+	
+endContract
