@@ -1493,7 +1493,7 @@ def String compileInitMethod(Model model) {
           	          	                  !contract.accessPolicy.isValid(new Rule('grant','read', contract.survivingObligations.«obligation.name», roleObj, contract.survivingObligations.«obligation.name».getController(controllers.length - 1))) ){
           	          	                    throw new Error(`access denied...`)
           	          	                  }
-          	
+          	let transitionState = contract.survivingObligations.«obligation.name».state;
             if (contract.survivingObligations.«obligation.name» != null && contract.survivingObligations.«obligation.name».violated()) { 
 				«var obName = "contract.survivingObligations."+obligation.name»
            		//notify
@@ -2881,9 +2881,10 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                     PAtomVariable:
                       return generateDotExpressionString(proposition.variable, 'contract')
                     PAtomPredicateTrueLiteral:
-                      return " "
+                    
+                      return 'true'
                     PAtomPredicateFalseLiteral:
-                      return " "
+                      return 'false'
                     PAtomDoubleLiteral:
                       return proposition.value.toString
                     PAtomIntLiteral:
