@@ -66,9 +66,9 @@ Declarations
     humidity : Alert with condition := "value > 70", window := 15, count := 3, controller := pfizer, performer := regulator;
     shock : Alert with condition := "value > 2.5",  window := 5, count := 1, controller := pfizer, performer := regulator;
     lightExposure : Alert with condition := "value > 0",  window := 1, count := 1, controller := pfizer, performer := regulator;
-    sealOpen : Alert with condition := "value == 1", window := 1,  count := 1, controller := pfizer, performer := regulator;
+    sealOpen : Alert with condition := "value = 1", window := 1,  count := 1, controller := pfizer, performer := regulator;
     
-    
+     
  
 Preconditions
 vaccineDose.FDAapproval==true;
