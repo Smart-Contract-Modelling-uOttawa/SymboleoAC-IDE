@@ -193,6 +193,8 @@ class Symboleo2SC extends SymboleoGenerator {
    // AC
   val controller =  new HashMap<Resource, List<Controller>>
 	
+ 
+ 
   def void generateHFSource(IFileSystemAccess2 fsa, Model model) {
     parse(model)
     compileDomainTypes(fsa, model)
@@ -409,7 +411,6 @@ class Symboleo2SC extends SymboleoGenerator {
           «method»
           
         «ENDFOR»
- 
           //notification
           async trigger_notification(ctx, event) {
         
@@ -421,7 +422,7 @@ class Symboleo2SC extends SymboleoGenerator {
           
           return {successful: true}
         }
-       
+        
          /**
            * Stores the hardcoded rolesList in the ledger as ACPolicyRecord with a signed hash.
            * Can only be called by Regulator or Admin.
@@ -568,10 +569,10 @@ class Symboleo2SC extends SymboleoGenerator {
                   eventType: "SensorEvent",
                   sensorType: dObj._name,
                   sensorId: dObj.sensorId,
-                  condition:(dObj.condition._value.trim() === "")? "": dObj.condition._value,
-                  window: (dObj.window._value.trim() === "")? "": "time("+dObj.window._value+ " min)",
-                  having: (dObj.count._value.trim() === "")? "":"count(*) > " +dObj.count._value,
-                  select: "sensorId, sensorTimestamp"+((dObj.count._value.trim() === "")? ", value " : ", count(*) as cnt, avg(value)")+" as avgValue",
+                  condition: dObj.condition._value,
+                  window: "time("+dObj.window._value+ " min)",
+                  having: "count(*) >= " +dObj.count._value,
+                  select: "sensorId, sensorTimestamp, count(*) as cnt, avg(value) as avgValue",
                   chaincodeFunction: "trigger_" + dObj._name
                 });
               }
@@ -1220,8 +1221,6 @@ return addRule
 def String compileInitMethod(Model model) {
     val code = '''
       async init(ctx, args) {
-      	const cid = new ClientIdentity(ctx.stub);
-      	let roleObj;
       	const inputs = JSON.parse(args);
         const contractInstance = new «model.contractName» («model.parameters.map[Parameter p | "inputs." + p.name].join(', ')»)
         this.initialize(contractInstance)
@@ -1248,19 +1247,7 @@ def String compileInitMethod(Model model) {
               contractInstance.powers.«power.name».trigerredConditional()
             «ENDIF»
           «ENDFOR»
-      // First security layer
-                	try{           	
-                	       roleObj = contractInstance.authenticate(cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'), 
-                	       cid.getAttributeValue('organization'), cid.getAttributeValue('department'),contractInstance)
-                	
-                	             if(roleObj === null ){ // this mean the roleObj (role who calls the transaction) not exist in our conttract
-                	              throw new Error('Unauthorized: Unknown access'); 
-                	        }
-                	
-                	    }catch(err){
-                	        console.log('access control error: ', err)
-                	        return { successful: false, message: err.message }
-                	    }// end of first layer
+      
           await ctx.stub.putState(contractInstance.id, Buffer.from(serialize(contractInstance)))
       
           return {successful: true, contractId: contractInstance.id}
