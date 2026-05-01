@@ -696,7 +696,7 @@ class Symboleo2SC extends SymboleoGenerator {
             let eventObj = contract.findObject(requiredResource.event, requiredResource._type, contract)
             if (  eventObj != null){
             let controllers = eventObj._controller
-            if(contract.accessPolicy.hasPermesstion('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1)) || contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1))){
+            if(contract.accessPolicy.hasPermesstion('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1)) || contract.accessPolicy.hasPermesstionOnLegalPosition('grant','read', eventObj, roleObj, eventObj.getController(controllers.length - 1), contract)){
               output = {time: eventObj.getHappenedTime(), state: eventObj.hasHappened()  ? "Happened" : "Not Happened"}  
             }else{
               throw new Error(`access denied...`)
