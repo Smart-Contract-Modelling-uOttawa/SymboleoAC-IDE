@@ -31,6 +31,21 @@ Once the IDE is set up and operational:
 
 ## How to Specify AC in SymboleoAC?
 
+Access control in SymboleoAC is specified within the **Contract Body** section of Symboleo contract specification.  
+
+This section defines who is authorized to perform specific actions on particular resources.
+
+The following table summarizes the main access control concepts:
+
+| Access Control Concept | Description |
+|----------------------|------------|
+| **ACPolicy** | Indicates the beginning of the access control section. This section governs who has permission to perform specific actions on resources within the contract. |
+| **controllers** | Defines the controller of the access control policy. Controller of contract policy is responsible for managing the policy and specifying constraints over rules. |
+| **rule** | Each rule defines a decision (e.g., grant or revoke) for specific roles to access resources. These rules determine how entities interact with contract resources. |
+| **accessedRole** | The role for which access is being granted or revoked. |
+| **accessedResource** | The resource on which access is being controlled. |
+| **Controller** | The entity or entities responsible for managing and enforcing access control to a specifc resource. |
+
 
 ## Examples
 
