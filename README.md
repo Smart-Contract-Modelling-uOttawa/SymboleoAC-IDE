@@ -44,7 +44,7 @@ The following table summarizes the main access control concepts:
 | **rule** | Each rule defines a decision (e.g., grant or revoke) for specific roles to access resources. These rules determine how entities interact with contract resources. |
 | **accessedRole** | The role for which access is being granted or revoked. |
 | **accessedResource** | The resource on which access is being controlled. |
-| **Resources Controller** | The entity or entities responsible for managing and enforcing access control to a specifc resource. |
+| **Resources Controller** | The entity responsible for managing and enforcing access control to a specifc resource. |
 
 The sample contracts available in `SymboleoAC-IDE/samples/` demonstrate how access control is specified in Symboleo.
 
