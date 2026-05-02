@@ -32,14 +32,7 @@ EnumItem:
 	name=ID;
 
 // TODO not extend itself, prevent cycles
-//AC-- here I added operation
-//AC-- Added if a Role is a contracting party as well
-/*
-RegularType:
-	name=ID ('isA' | 'isAn') ontologyType=OntologyType (thirdParty=ThirdParty)? ('with' (attributes+=Attribute ',')* (attributes+=Attribute))? ('Operation' '('operations+=Operation ',')* (operations+=Operation)')'? |
-	name=ID ('isA' | 'isAn') regularType=[RegularType] ('with' (attributes+=Attribute ',')* (attributes+=Attribute))? ('Operation' '('operations+=Operation ',')* (operations+=Operation)')'? |
-	name=ID ('isA' | 'isAn') aResource=AResource  ('with' (attributes+=Attribute ',')* (attributes+=Attribute))? ('Operation' '('operations+=Operation ',')* (operations+=Operation)')'?;
-*/
+//AC
 RegularType:
 	name=ID ('isA' | 'isAn') ontologyType=OntologyType (thirdParty=ThirdParty)? ('with' (attributes+=Attribute ',')* (attributes+=Attribute))? |
 	name=ID ('isA' | 'isAn') regularType=[RegularType] ('with' (attributes+=Attribute ',')* (attributes+=Attribute))? |
@@ -88,21 +81,6 @@ AResource:
 ;
 
 //AC
-//Resource:
-	//Obligation |
-	//Power |
-	//OntologyType |
-	//ACPolicy
-
-//;
-
-//AC
-/*
- * ACPolicy:
-	name=ID ('with' (controller+=Controller ',')*)?
-	;
- */
-//AC
 ACPolicy:
 	 ('with' 'Controller' (controller+=Controller ',')* (controller+=Controller))
 	; 
@@ -114,15 +92,10 @@ Controller:
 
 
 //AC
-//accessedResource attribute or resource, attribute is not part of class resource
 Rule:
 	name=ID ':'  ((action=('Grant' | 'Revoke')) permission=Permission 'To' accessedRole=VariableDotExpression 'On' accessedResource=Resource  'by' controller=VariableDotExpression)
 	 ;
-//|
-	//name=ID ':'  (action=Action permission= Permission 'To' accessedRole=VariableDotExpression 'On' 'obligations.' accessedResource = [Obligation] 'by' controller=VariableDotExpression)
-	//name=ID ':'  ('GRNAT' | 'REVOKE' per= Permission 'TO' role=OntologyType("Role") 'ON' accessedResource=PointAtom) |
-	//name=ID ':'  ('GRNAT' | 'REVOKE' per= Permission 'TO' role=OntologyType("Role") 'ON' accessedResource=OperationDotExpression)
-	//(VariableDotExpression | Resource )
+
 
 //AC
 Resource:
@@ -132,7 +105,7 @@ Resource:
  	{ResourceACPolicy} (resourceAc=ACPolicy)|
  	{ResourceAttribute} (resourceAt=Attribute) |
  	{ResourceDot} (resourceDot= VariableDotExpression)|
-	{ResourceOperation} (resourceOpe=Operation) //| {AResource} (aResource=AResource)
+	{ResourceOperation} (resourceOpe=Operation) 
 ;
 
 
@@ -179,20 +152,10 @@ Assignment:
 	;
 
 
-//sum returns AssignExpression:
-// {AssignExpression} name=ID  op=":=" ({sum.left = current} (right=Expression))
- //;
 
-// Assign should be used for ENV parameters or parameters of the contract. any variable initiate in the declaration are
-//can not be used because the initial value will be assigned to the variable each time you trigger any events.
 OAssignment:
 	{OAssignExpression} name2= VariableDotExpression op=":=" (value=Expression);
-	// |
-	// Osum
-// ;
-// Osum returns OAssignExpression:
-//	{OAssignExpression} name2= VariableDotExpression op=":=" ({Osum.left= current} ('+' | '-' | '*' | '/') (right=Expression))
-//;
+
 
 Double returns ecore::EDouble:
 	INT '.' INT;
@@ -341,11 +304,6 @@ DataTransfer returns Event:
 
 VariableEvent returns Event:
 	{VariableEvent} variable=VariableDotExpression;
-
-//AC
-//VariableData returns Event:
-	//{VariableData} variable=VariableDotExpression
-//;
 
 
 PowerEvent returns Event:
