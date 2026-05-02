@@ -12,6 +12,22 @@ To install and use the SymboleoAC IDE, please follow the official installation g
 
 ## How to Use the IDE?
 
+Once the IDE is set up and operational:
+
+1. Open the **runtime-Eclipse workspace** using the steps provided in the installation guide.
+
+2. Create a new general project:  
+   `File → New → Project… → General → Project`
+
+3. Explore the **Sample** folder, which contains several example contracts.  
+   You can either:
+   - Generate smart contracts from the provided examples, or  
+   - Start writing a \Symboleo/ specification from scratch.
+
+4. Inside your project, create a new file with the `.symboleo` extension.
+
+5. You can copy and paste an example from the **Sample** folder into your new file as a starting point.
+
 
 ## How to Specify AC in SymboleoAC?
 
