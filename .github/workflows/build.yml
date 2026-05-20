@@ -1,0 +1,51 @@
+name: Build CLI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cli/**'
+      - 'ca.uottawa.csmlab.symboleo/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'ca.uottawa.csmlab.symboleo/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Build fat jar
+        working-directory: cli
+        run: mvn -B -ntp clean package
+
+      - name: Smoke-test the jar against bundled samples
+        working-directory: cli
+        run: |
+          set -e
+          jar=target/symboleo-cli-1.0.0-all.jar
+          test -f "$jar"
+          for f in ../samples/*.symboleo; do
+            echo "::group::$(basename "$f")"
+            java -jar "$jar" "$f" --quiet
+            echo "::endgroup::"
+          done
+
+      - name: Upload jar as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: symboleo-cli
+          path: cli/target/symboleo-cli-*-all.jar
+          if-no-files-found: error

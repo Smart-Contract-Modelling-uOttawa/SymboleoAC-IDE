@@ -1,0 +1,74 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'cli-v*'    # e.g. cli-v1.0.0, cli-v1.0.1
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to create (e.g. cli-v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      - name: Build fat jar
+        working-directory: cli
+        run: mvn -B -ntp clean package
+
+      - name: Smoke-test
+        working-directory: cli
+        run: |
+          set -e
+          jar=target/symboleo-cli-1.0.0-all.jar
+          test -f "$jar"
+          for f in ../samples/*.symboleo; do java -jar "$jar" "$f" --quiet; done
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create / update GitHub Release with jar attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: SymboleoAC CLI ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          files: cli/target/symboleo-cli-*-all.jar
+          fail_on_unmatched_files: true
+          body: |
+            Headless validator for `.symboleo` files. No Eclipse required at runtime.
+
+            ## Download
+
+            Grab `symboleo-cli-1.0.0-all.jar` from the Assets below.
+
+            ## Usage
+
+            ```bash
+            java -jar symboleo-cli-1.0.0-all.jar <input.symboleo> [--format text|json] [--out errors.json] [--quiet]
+            ```
+
+            Exit codes: `0` clean, `1` validation errors, `2` usage / I/O error.
+
+            See [`cli/README.md`](cli/README.md) for full documentation.

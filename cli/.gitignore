@@ -1,0 +1,7 @@
+target/
+*.class
+*.jar
+
+# xtend-gen here is only created if someone runs xtend-maven-plugin locally;
+# the actual xtend output we compile against lives in the runtime project.
+xtend-gen/
