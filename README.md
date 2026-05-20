@@ -10,6 +10,91 @@ To install and use the SymboleoAC IDE, please follow the official installation g
 
 [Installation Guide](https://github.com/Smart-Contract-Modelling-uOttawa/Symboleo-IDE/blob/master/INSTALL.md)
 
+## Headless CLI Validator
+
+For batch experiments and automated pipelines (e.g. LLM transform-and-fix
+loops), a headless command-line validator is available that runs the Xtext
+parser and every `@Check` rule in [`SymboleoValidator`](ca.uottawa.csmlab.symboleo/src/ca/uottawa/csmlab/symboleo/validation/SymboleoValidator.java)
+without launching Eclipse.
+
+### Download
+
+Grab the latest fat jar from the **Releases** page:
+
+[symboleo-cli-1.0.0-all.jar](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE/releases/latest)
+
+Requires **Java 17+** on PATH. No other dependencies.
+
+### Usage
+
+```bash
+java -jar symboleo-cli-1.0.0-all.jar <input.symboleo> [options]
+```
+
+| Option | Description |
+|---|---|
+| `-o`, `--out <file>` | Write diagnostics to a file instead of stdout |
+| `-f`, `--format <fmt>` | `text` (default) or `json` |
+| `-q`, `--quiet` | Suppress the human-readable summary on stdout |
+| `-h`, `--help` | Show usage |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | File parses, no `ERROR`-severity issues (warnings allowed) |
+| `1` | One or more `ERROR`-severity issues (grammar or `@Check`) |
+| `2` | Usage error or I/O failure (input missing, etc.) |
+
+### JSON output shape
+
+Ideal as input to an automated fixer (e.g. LLM):
+
+```json
+{
+  "file": "/path/to/contract.symboleo",
+  "issues": [
+    {
+      "severity": "ERROR",
+      "code": "org.eclipse.xtext.diagnostics.Diagnostic.Syntax",
+      "line": 64, "column": 3, "offset": 5691, "length": 8,
+      "message": "Duplicate identifier delivery"
+    }
+  ],
+  "summary": { "errors": 1, "warnings": 0, "total": 1 }
+}
+```
+
+### Examples
+
+Validate a single file and dump errors as JSON:
+
+```bash
+java -jar symboleo-cli-1.0.0-all.jar samples/MeatSale.symboleo \
+     --format json --out errors.json
+```
+
+Batch-validate a directory, stopping on the first error (bash):
+
+```bash
+for f in contracts/*.symboleo; do
+  java -jar symboleo-cli-1.0.0-all.jar "$f" --quiet || exit 1
+done
+```
+
+PowerShell equivalent:
+
+```powershell
+Get-ChildItem contracts\*.symboleo | ForEach-Object {
+  java -jar symboleo-cli-1.0.0-all.jar $_.FullName --quiet
+  if ($LASTEXITCODE -ne 0) { throw "validation failed on $($_.Name)" }
+}
+```
+
+### Building from source
+
+See [`cli/README.md`](cli/README.md) for the developer build instructions.
+
 ## How to Use the IDE?
 
 Once the IDE is set up and operational:
