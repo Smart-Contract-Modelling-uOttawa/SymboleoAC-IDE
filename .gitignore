@@ -104,6 +104,14 @@ generated/
 src-gen/
 xtend-gen/
 
+# Exception: the headless CLI (cli/) builds against pre-generated sources of
+# the runtime project. MWE2 cannot be run from CI on Java 17+, so these must
+# be checked in. Re-generate them by running GenerateSymboleo.mwe2 in Eclipse.
+!ca.uottawa.csmlab.symboleo/src-gen/
+!ca.uottawa.csmlab.symboleo/xtend-gen/
+!ca.uottawa.csmlab.symboleo/model/
+!ca.uottawa.csmlab.symboleo/model/generated/
+
 # Ignore plugin.xml_gen and feature.xml_gen files, when build Eclipse Plugins.
 *.xml_gen
 
