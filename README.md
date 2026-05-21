@@ -52,16 +52,32 @@ Ideal as input to an automated fixer (e.g. LLM):
 
 ```json
 {
-  "file": "/path/to/contract.symboleo",
+  "summary": {
+    "total": 2,
+    "warnings": 0,
+    "errors": 2
+  },
+  "file": "C:\\Users\\SomeUser\\Models\\Test.symboleo",
   "issues": [
     {
       "severity": "ERROR",
-      "code": "org.eclipse.xtext.diagnostics.Diagnostic.Syntax",
-      "line": 64, "column": 3, "offset": 5691, "length": 8,
-      "message": "Duplicate identifier delivery"
+      "code": null,
+      "offset": 3088,
+      "line": 41,
+      "column": 34,
+      "length": 5,
+      "message": "Type of 'name' in myAsset is Number, it does not match String"
+    },
+    {
+      "severity": "ERROR",
+      "code": null,
+      "offset": 9590,
+      "line": 137,
+      "column": 2,
+      "length": 17,
+      "message": "Duplicate identifier oSomeObligation"
     }
-  ],
-  "summary": { "errors": 1, "warnings": 0, "total": 1 }
+  ]
 }
 ```
 
