@@ -3,11 +3,16 @@
  */
 package ca.uottawa.csmlab.symboleo.validation;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.xtext.validation.Check;
 import org.eclipse.xtext.validation.CheckType;
@@ -30,12 +35,15 @@ import ca.uottawa.csmlab.symboleo.symboleo.Obligation;
 import ca.uottawa.csmlab.symboleo.symboleo.OneArgMathFunction;
 import ca.uottawa.csmlab.symboleo.symboleo.OneArgStringFunction;
 import ca.uottawa.csmlab.symboleo.symboleo.OntologyType;
+import ca.uottawa.csmlab.symboleo.symboleo.PArithmetic;
 import ca.uottawa.csmlab.symboleo.symboleo.Parameter;
+import ca.uottawa.csmlab.symboleo.symboleo.Proposition;
 import ca.uottawa.csmlab.symboleo.symboleo.ParameterType;
 import ca.uottawa.csmlab.symboleo.symboleo.Power;
 import ca.uottawa.csmlab.symboleo.symboleo.Ref;
 import ca.uottawa.csmlab.symboleo.symboleo.RegularType;
 import ca.uottawa.csmlab.symboleo.symboleo.Resource;
+import ca.uottawa.csmlab.symboleo.symboleo.ResourceDot;
 import ca.uottawa.csmlab.symboleo.symboleo.Rule;
 import ca.uottawa.csmlab.symboleo.symboleo.SymboleoPackage;
 import ca.uottawa.csmlab.symboleo.symboleo.ThreeArgDateFunction;
@@ -878,6 +886,510 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
   //  error(" ACPolicy controller value in '" + acpolicy.getController().get(indexController) + "' is not type of Role.'", acpolicy,SymboleoPackage.Literals.AC_POLICY__CONTROLLER);
 
 
+
+  /*
+   * ==========================================================================
+   * C7 validation rules (expert-reviewed tiering; see the SymboleoAC-Incoterms
+   * repository, coverage/symboleoac-improvements.md, for the corpus evidence).
+   * Errors:   E1 Event types need a Role-typed performer;
+   *           E2 reserved / generated-name identifier collisions;
+   *           E3 unique AC-rule names;
+   *           E6 Role types need the AC attributes name/org/dept;
+   *           E12a inheritance cycles (an error rather than a lint because a
+   *                cycle previously crashed the compiler's own helpers).
+   * Warnings: W8 arithmetic in an obligation consequent (upstream codegen
+   *              defect: LegalSituation metadata builder emits invalid JS).
+   * Lints:    L9 permission giver should own/control/perform the resource;
+   *           L11 dormant conditional norms;
+   *           L12b cycles among variable initializations.
+   * ==========================================================================
+   */
+
+  // Identifiers that break the generated JavaScript/Java or collide with
+  // members of the generated contract and domain classes.
+  private static final Set<String> RESERVED_IDENTIFIERS = new HashSet<>(Arrays.asList(
+      // JavaScript keywords and reserved words
+      "break", "case", "catch", "class", "const", "continue", "debugger",
+      "default", "delete", "do", "else", "enum", "export", "extends",
+      "finally", "for", "function", "if", "import", "in", "instanceof",
+      "new", "null", "return", "super", "switch", "this", "throw", "try",
+      "typeof", "var", "void", "while", "with", "yield", "let", "static",
+      "await", "implements", "interface", "package", "private", "protected",
+      "public", "arguments", "eval",
+      // Java keywords not already listed (the compiler pipeline is Java)
+      "abstract", "assert", "boolean", "byte", "char", "double", "final",
+      "float", "goto", "int", "long", "native", "short", "strictfp",
+      "synchronized", "throws", "transient", "volatile",
+      // members of the generated contract / domain classes and the js-core
+      // runtime: a variable or attribute with one of these names silently
+      // shadows generated state (e.g. a variable named `constructor`)
+      "constructor", "prototype", "__proto__", "state", "activeState",
+      "obligations", "powers", "survivingObligations", "notified",
+      "accessPolicy", "authenticate", "activated", "terminated", "suspended",
+      "resumed", "fulfilled", "violated", "expired", "discharged",
+      "serialize", "deserialize", "events", "id",
+      "_name", "_type", "_timestamp", "_controller", "_performer", "_events",
+      "_value",
+      // JavaScript globals and js-core exported class names (capitalized
+      // domain-type names generate `class <Name>` declarations)
+      "Object", "Function", "Array", "Boolean", "Number", "String", "Date",
+      "Math", "JSON", "Promise", "Symbol", "Error", "Map", "Set", "Buffer",
+      "Event", "Obligation", "Power", "Role", "Asset", "Party", "Contract",
+      "SymboleoContract", "Predicates", "Events", "InternalEvent",
+      "InternalEventSource", "InternalEventType", "LegalSituation", "Rule",
+      "ACPolicy", "TimePoint", "TimeInterval", "Attribute", "Operation",
+      "Resource", "DataTransfer", "StateTransition", "AbstractEvent"));
+
+  private static String reservedMessage(String name, String what) {
+    return what + " name '" + name + "' collides with a JavaScript/Java "
+        + "reserved word or a member of the generated smart-contract classes; "
+        + "the generated code would be invalid or silently corrupted. "
+        + "Please rename it.";
+  }
+
+  // Walk a dot expression down to its base variable name, e.g. goods.description -> "goods".
+  private static String baseVariableName(Ref ref) {
+    Ref current = ref;
+    while (current instanceof VariableDotExpression) {
+      current = ((VariableDotExpression) current).getRef();
+    }
+    if (current instanceof VariableRef) {
+      return ((VariableRef) current).getVariable();
+    }
+    return null;
+  }
+
+  /*
+   * C7-E1: every Event type must declare (or inherit) a Role-typed
+   * `performer` attribute. The generated event constructor and the
+   * access-control layer both dereference it: an event without a performer
+   * compiles and even parses as JavaScript, but is untriggerable on-chain.
+   */
+  @Check(CheckType.FAST)
+  public void checkEventTypeHasRolePerformer(RegularType type) {
+    RegularType base = Helpers.getBaseType(type);
+    if (base == null || base.getOntologyType() == null) {
+      return;
+    }
+    if (!base.getOntologyType().getName().equalsIgnoreCase("Event")) {
+      return;
+    }
+    for (Attribute atr : Helpers.getAttributesOfRegularType(type)) {
+      if (atr.getName().equals("performer")) {
+        if (atr.getDomainType() != null) {
+          RegularType atrBase = Helpers.getBaseType(atr.getDomainType());
+          if (atrBase != null && atrBase.getOntologyType() != null
+              && atrBase.getOntologyType().getName().equals("Role")) {
+            return; // Role-typed performer present
+          }
+        }
+        error("Event type '" + type.getName() + "' declares a 'performer' that is "
+            + "not typed as a Role; the generated code and the access-control "
+            + "layer require a Role-typed performer.", type,
+            SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+        return;
+      }
+    }
+    error("Event type '" + type.getName() + "' must declare a Role-typed "
+        + "'performer' attribute (e.g. 'performer: Seller'); without it the "
+        + "generated event cannot be triggered on-chain.", type,
+        SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+  }
+
+  /*
+   * C7-E2: reserved / generated-name identifier collisions.
+   */
+  @Check(CheckType.FAST)
+  public void checkDomainTypeNameReserved(DomainType type) {
+    if (RESERVED_IDENTIFIERS.contains(type.getName())) {
+      error(reservedMessage(type.getName(), "Domain type"), type,
+          SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+    }
+  }
+
+  @Check(CheckType.FAST)
+  public void checkVariableNameReserved(Variable v) {
+    if (RESERVED_IDENTIFIERS.contains(v.getName())) {
+      error(reservedMessage(v.getName(), "Variable"), v,
+          SymboleoPackage.Literals.VARIABLE__NAME);
+    }
+  }
+
+  @Check(CheckType.FAST)
+  public void checkParameterNameReserved(Parameter p) {
+    if (RESERVED_IDENTIFIERS.contains(p.getName())) {
+      error(reservedMessage(p.getName(), "Parameter"), p,
+          SymboleoPackage.Literals.PARAMETER__NAME);
+    }
+  }
+
+  @Check(CheckType.FAST)
+  public void checkAttributeNameReserved(Attribute a) {
+    if (RESERVED_IDENTIFIERS.contains(a.getName())) {
+      error(reservedMessage(a.getName(), "Attribute"), a,
+          SymboleoPackage.Literals.ATTRIBUTE__NAME);
+    }
+  }
+
+  @Check(CheckType.FAST)
+  public void checkObligationNameReserved(Obligation o) {
+    if (RESERVED_IDENTIFIERS.contains(o.getName())) {
+      error(reservedMessage(o.getName(), "Obligation"), o,
+          SymboleoPackage.Literals.OBLIGATION__NAME);
+    }
+  }
+
+  @Check(CheckType.FAST)
+  public void checkPowerNameReserved(Power p) {
+    if (RESERVED_IDENTIFIERS.contains(p.getName())) {
+      error(reservedMessage(p.getName(), "Power"), p,
+          SymboleoPackage.Literals.POWER__NAME);
+    }
+  }
+
+  /*
+   * C7-E3: AC-rule names must be unique (completes the check that was left
+   * commented out).
+   */
+  @Check(CheckType.FAST)
+  public void checkRuleNamesAreUnique(Model model) {
+    Set<String> identifiers = new HashSet<>();
+    for (Rule x : model.getRules()) {
+      if (identifiers.contains(x.getName())) {
+        error("Duplicate rule identifier " + x.getName(), x,
+            SymboleoPackage.Literals.RULE__NAME);
+      }
+      identifiers.add(x.getName());
+      if (RESERVED_IDENTIFIERS.contains(x.getName())) {
+        error(reservedMessage(x.getName(), "Rule"), x,
+            SymboleoPackage.Literals.RULE__NAME);
+      }
+    }
+  }
+
+  /*
+   * C7-E6: every Role type must declare (or inherit) the attributes the
+   * generated access-control `authenticate` matches against the caller's
+   * certificate: name, org, dept. Without them, every transaction fails
+   * on-chain with an opaque "Unauthorized" (SymboleoAC2SC issue #1).
+   */
+  @Check(CheckType.FAST)
+  public void checkRoleTypeHasACAttributes(RegularType type) {
+    RegularType base = Helpers.getBaseType(type);
+    if (base == null || base.getOntologyType() == null) {
+      return;
+    }
+    if (!base.getOntologyType().getName().equals("Role")) {
+      return;
+    }
+    Set<String> names = new HashSet<>();
+    for (Attribute atr : Helpers.getAttributesOfRegularType(type)) {
+      names.add(atr.getName());
+    }
+    List<String> missing = new ArrayList<>();
+    for (String required : Arrays.asList("name", "org", "dept")) {
+      if (!names.contains(required)) {
+        missing.add(required);
+      }
+    }
+    if (!missing.isEmpty()) {
+      error("Role type '" + type.getName() + "' is missing the access-control "
+          + "attribute(s) " + missing + "; the generated authenticate() matches "
+          + "the caller's certificate against name/org/dept, so a role without "
+          + "them cannot be authorized on-chain.", type,
+          SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+    }
+  }
+
+  /*
+   * C7-E12a: inheritance cycles among domain types. An error rather than a
+   * lint: a cycle used to send the compiler's own type-walking helpers into
+   * unbounded recursion.
+   */
+  @Check(CheckType.FAST)
+  public void checkInheritanceCycles(RegularType type) {
+    Set<RegularType> visited = new HashSet<>();
+    RegularType current = type;
+    while (current != null) {
+      if (!visited.add(current)) {
+        error("Inheritance cycle: domain type '" + type.getName()
+            + "' is (transitively) declared as a subtype of itself.", type,
+            SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+        return;
+      }
+      current = current.getRegularType();
+    }
+  }
+
+  /*
+   * C7-W8: arithmetic inside an obligation consequent. The norm-evaluation
+   * code is generated correctly, but the LegalSituation metadata builder in
+   * the generated contract class emits a nested, mis-quoted expression - a
+   * JavaScript syntax error (SymboleoAC2SC issue #3). Warn until fixed.
+   */
+  @Check(CheckType.FAST)
+  public void checkArithmeticInConsequent(Obligation o) {
+    Proposition consequent = o.getConsequent();
+    if (consequent == null) {
+      return;
+    }
+    if (consequent instanceof PArithmetic) {
+      warning(arithmeticWarning(o.getName()), o,
+          SymboleoPackage.Literals.OBLIGATION__CONSEQUENT);
+      return;
+    }
+    TreeIterator<EObject> it = consequent.eAllContents();
+    while (it.hasNext()) {
+      if (it.next() instanceof PArithmetic) {
+        warning(arithmeticWarning(o.getName()), o,
+            SymboleoPackage.Literals.OBLIGATION__CONSEQUENT);
+        return;
+      }
+    }
+  }
+
+  private static String arithmeticWarning(String norm) {
+    return "The consequent of '" + norm + "' contains an arithmetic expression: "
+        + "due to a known code-generation defect (SymboleoAC2SC#3), the "
+        + "generated contract class currently contains a JavaScript syntax "
+        + "error for such consequents (the norm evaluation itself is correct). "
+        + "Verify the generated code or apply the documented patch.";
+  }
+
+  /*
+   * C7-L9: the granting role in an access-control rule should be the owner,
+   * controller, or performer of the granted resource (completes the check
+   * that was left commented out). Informational.
+   */
+  @Check(CheckType.FAST)
+  public void checkPermissionGiver(Model model) {
+    for (Rule rule : model.getRules()) {
+      Resource res = rule.getAccessedResource();
+      if (!(res instanceof ResourceDot)) {
+        continue; // norm/policy resources have no owner/controller/performer assignments
+      }
+      String resourceVarName = baseVariableName(((ResourceDot) res).getResourceDot());
+      if (resourceVarName == null) {
+        continue;
+      }
+      Optional<Variable> resourceVar = model.getVariables().stream()
+          .filter(v -> v.getName().equals(resourceVarName)).findFirst();
+      if (resourceVar.isEmpty()) {
+        continue;
+      }
+      String controllerName = baseVariableName(rule.getController());
+      if (controllerName == null) {
+        continue;
+      }
+      boolean sawRelevantAssignment = false;
+      boolean giverMatches = false;
+      for (Assignment asg : resourceVar.get().getAttributes()) {
+        AssignExpression ae = (AssignExpression) asg;
+        if (!Arrays.asList("owner", "controller", "performer").contains(ae.getName())) {
+          continue;
+        }
+        sawRelevantAssignment = true;
+        // the assigned value is a variable reference like `:= seller`
+        if (matchesVariable(ae.getValue(), controllerName)) {
+          giverMatches = true;
+          break;
+        }
+      }
+      if (sawRelevantAssignment && !giverMatches) {
+        info("Rule '" + rule.getName() + "': the granting role '" + controllerName
+            + "' is not the owner, controller, or performer of resource '"
+            + resourceVarName + "'.", rule, SymboleoPackage.Literals.RULE__CONTROLLER);
+      }
+    }
+  }
+
+  private static boolean matchesVariable(EObject expression, String variableName) {
+    if (expression == null) {
+      return false;
+    }
+    if (expression instanceof VariableRef) {
+      return variableName.equals(((VariableRef) expression).getVariable());
+    }
+    TreeIterator<EObject> it = expression.eAllContents();
+    while (it.hasNext()) {
+      EObject n = it.next();
+      if (n instanceof VariableRef
+          && variableName.equals(((VariableRef) n).getVariable())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /*
+   * C7-L11: dormant conditional norms. A norm whose trigger waits on an event
+   * that (a) no other norm interacts with and (b) has no performer path (its
+   * type carries no performer attribute, so no party can bring it about) can
+   * never awaken. Informational.
+   */
+  @Check(CheckType.FAST)
+  public void checkDormantNorms(Model model) {
+    List<EObject> norms = new ArrayList<>();
+    norms.addAll(model.getObligations());
+    norms.addAll(model.getSurvivingObligations());
+    norms.addAll(model.getPowers());
+
+    for (EObject norm : norms) {
+      Proposition trigger = (norm instanceof Obligation)
+          ? ((Obligation) norm).getTrigger()
+          : ((Power) norm).getTrigger();
+      if (trigger == null) {
+        continue;
+      }
+      for (String eventVar : collectEventVariableNames(trigger)) {
+        // (b) performer path: the event's type declares a performer
+        Optional<Variable> varDecl = model.getVariables().stream()
+            .filter(v -> v.getName().equals(eventVar)).findFirst();
+        boolean hasPerformer = false;
+        if (varDecl.isPresent() && varDecl.get().getType() != null) {
+          for (Attribute atr : Helpers.getAttributesOfRegularType(varDecl.get().getType())) {
+            if (atr.getName().equals("performer")) {
+              hasPerformer = true;
+              break;
+            }
+          }
+        }
+        if (hasPerformer) {
+          continue;
+        }
+        // (a) referenced by any other norm?
+        boolean referencedElsewhere = false;
+        for (EObject other : norms) {
+          if (other == norm) {
+            continue;
+          }
+          if (normReferencesEvent(other, eventVar)) {
+            referencedElsewhere = true;
+            break;
+          }
+        }
+        if (!referencedElsewhere) {
+          if (norm instanceof Obligation) {
+            info("Norm '" + ((Obligation) norm).getName() + "' may be dormant: its "
+                + "trigger waits on event '" + eventVar + "', which no other norm "
+                + "interacts with and which has no performer.", norm,
+                SymboleoPackage.Literals.OBLIGATION__NAME);
+          } else {
+            info("Norm '" + ((Power) norm).getName() + "' may be dormant: its "
+                + "trigger waits on event '" + eventVar + "', which no other norm "
+                + "interacts with and which has no performer.", norm,
+                SymboleoPackage.Literals.POWER__NAME);
+          }
+        }
+      }
+    }
+  }
+
+  private static Set<String> collectEventVariableNames(EObject proposition) {
+    Set<String> names = new HashSet<>();
+    if (proposition instanceof VariableEvent) {
+      String n = baseVariableName(((VariableEvent) proposition).getVariable());
+      if (n != null) {
+        names.add(n);
+      }
+    }
+    TreeIterator<EObject> it = proposition.eAllContents();
+    while (it.hasNext()) {
+      EObject node = it.next();
+      if (node instanceof VariableEvent) {
+        String n = baseVariableName(((VariableEvent) node).getVariable());
+        if (n != null) {
+          names.add(n);
+        }
+      }
+    }
+    return names;
+  }
+
+  private static boolean normReferencesEvent(EObject norm, String eventVar) {
+    List<Proposition> parts = new ArrayList<>();
+    if (norm instanceof Obligation) {
+      Obligation o = (Obligation) norm;
+      parts.add(o.getTrigger());
+      parts.add(o.getAntecedent());
+      parts.add(o.getConsequent());
+    } else if (norm instanceof Power) {
+      Power p = (Power) norm;
+      parts.add(p.getTrigger());
+      parts.add(p.getAntecedent());
+    }
+    for (Proposition part : parts) {
+      if (part != null && collectEventVariableNames(part).contains(eventVar)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /*
+   * C7-L12b: cycles among variable initializations (a := b.x, b := a.y).
+   * Informational.
+   */
+  @Check(CheckType.FAST)
+  public void checkVariableInitializationCycles(Model model) {
+    Set<String> variableNames = new HashSet<>();
+    for (Variable v : model.getVariables()) {
+      variableNames.add(v.getName());
+    }
+    Map<String, Set<String>> edges = new HashMap<>();
+    for (Variable v : model.getVariables()) {
+      Set<String> refs = new HashSet<>();
+      for (Assignment asg : v.getAttributes()) {
+        EObject value = ((AssignExpression) asg).getValue();
+        if (value == null) {
+          continue;
+        }
+        if (value instanceof VariableRef) {
+          String n = ((VariableRef) value).getVariable();
+          if (variableNames.contains(n)) {
+            refs.add(n);
+          }
+        }
+        TreeIterator<EObject> it = value.eAllContents();
+        while (it.hasNext()) {
+          EObject node = it.next();
+          if (node instanceof VariableRef) {
+            String n = ((VariableRef) node).getVariable();
+            if (variableNames.contains(n)) {
+              refs.add(n);
+            }
+          }
+        }
+      }
+      edges.put(v.getName(), refs);
+    }
+    Set<String> reported = new HashSet<>();
+    for (Variable v : model.getVariables()) {
+      if (reported.contains(v.getName())) {
+        continue;
+      }
+      if (hasPathBackTo(v.getName(), v.getName(), edges, new HashSet<>())) {
+        reported.add(v.getName());
+        info("Variable '" + v.getName() + "' participates in an initialization "
+            + "cycle (its declaration transitively references itself).", v,
+            SymboleoPackage.Literals.VARIABLE__NAME);
+      }
+    }
+  }
+
+  private static boolean hasPathBackTo(String target, String current,
+      Map<String, Set<String>> edges, Set<String> visited) {
+    Set<String> next = edges.getOrDefault(current, java.util.Collections.emptySet());
+    for (String n : next) {
+      if (n.equals(target)) {
+        return true;
+      }
+      if (visited.add(n) && hasPathBackTo(target, n, edges, visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
 }// end of the class
 
