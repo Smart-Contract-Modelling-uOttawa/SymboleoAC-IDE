@@ -35,7 +35,6 @@ import ca.uottawa.csmlab.symboleo.symboleo.Obligation;
 import ca.uottawa.csmlab.symboleo.symboleo.OneArgMathFunction;
 import ca.uottawa.csmlab.symboleo.symboleo.OneArgStringFunction;
 import ca.uottawa.csmlab.symboleo.symboleo.OntologyType;
-import ca.uottawa.csmlab.symboleo.symboleo.PArithmetic;
 import ca.uottawa.csmlab.symboleo.symboleo.Parameter;
 import ca.uottawa.csmlab.symboleo.symboleo.Proposition;
 import ca.uottawa.csmlab.symboleo.symboleo.ParameterType;
@@ -897,8 +896,9 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
    *           E6 Role types need the AC attributes name/org/dept;
    *           E12a inheritance cycles (an error rather than a lint because a
    *                cycle previously crashed the compiler's own helpers).
-   * Warnings: W8 arithmetic in an obligation consequent (upstream codegen
-   *              defect: LegalSituation metadata builder emits invalid JS).
+   * (W8, arithmetic in an obligation consequent, was retired when the
+   * LegalSituation metadata-builder defect it warned about — SymboleoAC2SC#3
+   * — was fixed in Symboleo2SC.xtend.)
    * Lints:    L9 permission giver should own/control/perform the resource;
    *           L11 dormant conditional norms;
    *           L12b cycles among variable initializations.
@@ -1119,41 +1119,6 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       }
       current = current.getRegularType();
     }
-  }
-
-  /*
-   * C7-W8: arithmetic inside an obligation consequent. The norm-evaluation
-   * code is generated correctly, but the LegalSituation metadata builder in
-   * the generated contract class emits a nested, mis-quoted expression - a
-   * JavaScript syntax error (SymboleoAC2SC issue #3). Warn until fixed.
-   */
-  @Check(CheckType.FAST)
-  public void checkArithmeticInConsequent(Obligation o) {
-    Proposition consequent = o.getConsequent();
-    if (consequent == null) {
-      return;
-    }
-    if (consequent instanceof PArithmetic) {
-      warning(arithmeticWarning(o.getName()), o,
-          SymboleoPackage.Literals.OBLIGATION__CONSEQUENT);
-      return;
-    }
-    TreeIterator<EObject> it = consequent.eAllContents();
-    while (it.hasNext()) {
-      if (it.next() instanceof PArithmetic) {
-        warning(arithmeticWarning(o.getName()), o,
-            SymboleoPackage.Literals.OBLIGATION__CONSEQUENT);
-        return;
-      }
-    }
-  }
-
-  private static String arithmeticWarning(String norm) {
-    return "The consequent of '" + norm + "' contains an arithmetic expression: "
-        + "due to a known code-generation defect (SymboleoAC2SC#3), the "
-        + "generated contract class currently contains a JavaScript syntax "
-        + "error for such consequents (the norm evaluation itself is correct). "
-        + "Verify the generated code or apply the documented patch.";
   }
 
   /*
