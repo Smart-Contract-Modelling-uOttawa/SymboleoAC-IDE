@@ -51,13 +51,20 @@ class Helpers {
 
   def static List<Attribute> getAttributesOfRegularType(RegularType argType) {
     val attributes = new ArrayList<Attribute>;
+    // C7: guard against inheritance cycles (reported as errors by the
+    // validator); without this the loop below never terminates.
+    val visited = new java.util.HashSet<RegularType>;
     var type = argType;
+    visited.add(type);
     attributes.addAll(type.getAttributes());
     while(type.getRegularType() !== null) {
       type = type.getRegularType();
+      if (!visited.add(type)) {
+        return attributes; // inheritance cycle: stop here
+      }
       attributes.addAll(type.getAttributes());
     }
-    if(type.ontologyType.name.equalsIgnoreCase("Event")) {
+    if(type.ontologyType !== null && type.ontologyType.name.equalsIgnoreCase("Event")) {
       val rti = type as RegularTypeImpl;
       val tsAttribute = new MyAttributeImpl("_timestamp",
         new MyBaseTypeImpl("Date"), rti);
@@ -67,16 +74,21 @@ class Helpers {
   }
 
   def static RegularType getBaseType(DomainType domainType) {
-    switch (domainType) {
-      RegularType:
-        if(domainType.ontologyType !== null) {
-          return domainType
-        } else {
-          return getBaseType(domainType.regularType)
-        }
-      default:
-        null
+    // C7: iterative walk with a cycle guard (an `isA` cycle previously caused
+    // unbounded recursion here, crashing the compiler before the validator
+    // could report anything).
+    val visited = new java.util.HashSet<DomainType>
+    var DomainType current = domainType
+    while (current instanceof RegularType) {
+      if (!visited.add(current)) {
+        return null // inheritance cycle: reported as an error by the validator
+      }
+      if (current.ontologyType !== null) {
+        return current
+      }
+      current = current.regularType
     }
+    return null
   }
 
   def static handleExpressionError(ResolveExpressionResult res) {

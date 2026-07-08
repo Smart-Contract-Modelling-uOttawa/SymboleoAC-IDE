@@ -54,15 +54,22 @@ import org.eclipse.xtext.xbase.lib.IterableExtensions;
 public class Helpers {
   public static List<Attribute> getAttributesOfRegularType(final RegularType argType) {
     final ArrayList<Attribute> attributes = new ArrayList<Attribute>();
+    // C7: guard against inheritance cycles (reported as errors by the
+    // validator); without this the loop below never terminates.
+    final java.util.HashSet<RegularType> visited = new java.util.HashSet<RegularType>();
     RegularType type = argType;
+    visited.add(type);
     attributes.addAll(type.getAttributes());
     while ((type.getRegularType() != null)) {
       {
         type = type.getRegularType();
+        if (!visited.add(type)) {
+          return attributes; // inheritance cycle: stop here
+        }
         attributes.addAll(type.getAttributes());
       }
     }
-    boolean _equalsIgnoreCase = type.getOntologyType().getName().equalsIgnoreCase("Event");
+    boolean _equalsIgnoreCase = ((type.getOntologyType() != null) && type.getOntologyType().getName().equalsIgnoreCase("Event"));
     if (_equalsIgnoreCase) {
       final RegularTypeImpl rti = ((RegularTypeImpl) type);
       MyBaseTypeImpl _myBaseTypeImpl = new MyBaseTypeImpl("Date");
@@ -73,22 +80,22 @@ public class Helpers {
   }
 
   public static RegularType getBaseType(final DomainType domainType) {
-    Object _switchResult = null;
-    boolean _matched = false;
-    if (domainType instanceof RegularType) {
-      _matched=true;
-      OntologyType _ontologyType = ((RegularType)domainType).getOntologyType();
-      boolean _tripleNotEquals = (_ontologyType != null);
-      if (_tripleNotEquals) {
-        return ((RegularType)domainType);
-      } else {
-        return Helpers.getBaseType(((RegularType)domainType).getRegularType());
+    // C7: iterative walk with a cycle guard (an `isA` cycle previously caused
+    // unbounded recursion here, crashing the compiler before the validator
+    // could report anything).
+    final java.util.HashSet<DomainType> visited = new java.util.HashSet<DomainType>();
+    DomainType current = domainType;
+    while (current instanceof RegularType) {
+      if (!visited.add(current)) {
+        return null; // inheritance cycle: reported as an error by the validator
       }
+      OntologyType _ontologyType = ((RegularType) current).getOntologyType();
+      if (_ontologyType != null) {
+        return ((RegularType) current);
+      }
+      current = ((RegularType) current).getRegularType();
     }
-    if (!_matched) {
-      _switchResult = null;
-    }
-    return ((RegularType)_switchResult);
+    return null;
   }
 
   public static ResolveExpressionResult handleExpressionError(final ResolveExpressionResult res) {
