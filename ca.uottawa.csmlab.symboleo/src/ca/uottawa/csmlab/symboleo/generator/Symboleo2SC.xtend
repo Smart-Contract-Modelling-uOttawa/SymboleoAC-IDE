@@ -2536,7 +2536,7 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                  contract.obligations.«obligation.name» = new Obligation('«obligation.name»', «generateDotExpressionString(obligation.creditor, 'contract')», «generateDotExpressionString(obligation.debtor, 'contract')», contract, contract.«obligation.name»Situation)
                  «getSpecifiedControllerObligation(obligation,"contract")»
                  «getSpecifiedRulesCondObligation(obligation, model)»
-                if («obligation.antecedent instanceof PAtomPredicateTrueLiteral ? "true" : "!isNewInstance "» ) { «"\n"+generatePropositionAssignString(obligation.antecedent)»
+                if («obligation.antecedent instanceof PAtomPredicateTrueLiteral ? "true" : "!isNewInstance && (" + generatePropositionString(obligation.antecedent) + ")"» ) { «"\n"+generatePropositionAssignString(obligation.antecedent)»
                   contract.obligations.«obligation.name».trigerredUnconditional()
                   let transitionState = contract.obligations.«obligation.name».state;
                   if (!isNewInstance && «generatePropositionString(obligation.consequent)») { «"\n"+generatePropositionAssignString(obligation.consequent)»
