@@ -21,6 +21,8 @@ import ca.uottawa.csmlab.symboleo.Helpers;
 import ca.uottawa.csmlab.symboleo.ResolveExpressionResult;
 import ca.uottawa.csmlab.symboleo.symboleo.ACPolicy;
 import ca.uottawa.csmlab.symboleo.symboleo.AssignExpression;
+import ca.uottawa.csmlab.symboleo.symboleo.AtomicExpressionParameter;
+import ca.uottawa.csmlab.symboleo.symboleo.Expression;
 //import ca.uottawa.csmlab.symboleo.symboleo.AssignVariable;
 import ca.uottawa.csmlab.symboleo.symboleo.Assignment;
 import ca.uottawa.csmlab.symboleo.symboleo.Attribute;
@@ -520,6 +522,29 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     }
   }
 
+  // L4: is this expression a bare Event variable (used as its occurrence
+  // date point)? True iff it is a plain variable reference -- no attribute
+  // tail -- to a variable whose type is (transitively) isA Event.
+  private boolean isEventPoint(Expression e) {
+    if (!(e instanceof AtomicExpressionParameter)) {
+      return false;
+    }
+    Object ref = ((AtomicExpressionParameter) e).getValue();
+    if (!(ref instanceof VariableRef)) {
+      return false; // a VariableDotExpression is event.attr, not the event itself
+    }
+    String name = ((VariableRef) ref).getVariable();
+    List<Variable> vars = this.variables != null ? this.variables : java.util.Collections.emptyList();
+    for (Variable v : vars) {
+      if (name.equals(v.getName()) && v.getType() != null) {
+        RegularType base = Helpers.getBaseType(v.getType());
+        return base != null && base.getOntologyType() != null
+            && base.getOntologyType().getName().equalsIgnoreCase("Event");
+      }
+    }
+    return false;
+  }
+
   private static String argTypeMessage(String ordinal, String func,
       String expected, String found) {
     return "The " + ordinal + " argument of '" + func + "' must be a "
@@ -689,12 +714,17 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       if (typeRes.error != null) {
         error(typeRes.message, typeRes.error, typeRes.ref);
       }
-      if (!typeRes.type.equals("Date")) {
+      // L4: a bare Event variable is a valid date point -- its occurrence
+      // timestamp (e.g. Date.add(assistanceProvided, 5, days) = five days
+      // after the assistance happened). Accept it; the generator emits the
+      // event's ._timestamp. Anything else must resolve to a Date.
+      if (!typeRes.type.equals("Date") && !isEventPoint(function.getArg1())) {
         error("The first argument of '" + function.getName() + "' must be a "
-            + "Date, but the given expression has type '" + typeRes.type
+            + "Date or an Event, but the given expression has type '" + typeRes.type
             + "'. Pass a date point: a Date-typed contract parameter, a date "
-            + "attribute of an event (e.g. delivered.delDueDate), or another "
-            + "Date.add(...) expression.", function,
+            + "attribute of an event (e.g. delivered.delDueDate), a bare Event "
+            + "variable whose occurrence time is meant (e.g. assistanceProvided), "
+            + "or another Date.add(...) expression.", function,
             SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
       }
 

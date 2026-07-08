@@ -8589,7 +8589,16 @@ public class Symboleo2SC extends SymboleoGenerator {
         _matched=true;
         StringConcatenation _builder = new StringConcatenation();
         _builder.append("Utils.addTime(");
-        String _generateExpressionString = this.generateExpressionString(((ThreeArgDateFunction)functionCall).getArg1(), thisString);
+        // L4: a bare Event variable as arg1 means "n units after the event's
+        // occurrence" -- append ._timestamp. event.attr / Date params unchanged.
+        Expression _a1 = ((ThreeArgDateFunction)functionCall).getArg1();
+        boolean _a1IsEventVar = (_a1 instanceof AtomicExpressionParameter)
+          && (((AtomicExpressionParameter) _a1).getValue() instanceof VariableRef)
+          && !this.generateDotExpressionType(((AtomicExpressionParameter) _a1).getValue()).isEmpty();
+        String _generateExpressionString = this.generateExpressionString(_a1, thisString);
+        if (_a1IsEventVar) {
+          _generateExpressionString = (_generateExpressionString + "._timestamp");
+        }
         _builder.append(_generateExpressionString);
         _builder.append(", ");
         String _generateExpressionString_1 = this.generateExpressionString(((ThreeArgDateFunction)functionCall).getValue(), thisString);

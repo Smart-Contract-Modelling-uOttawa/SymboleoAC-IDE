@@ -2904,8 +2904,20 @@ def void generateNPMFile(IFileSystemAccess2 fsa, Model model) {
                         generateExpressionString(functionCall.arg2, thisString) + ")"
                     OneArgStringFunction:
                       return functionCall.name.replace("String", "Str") + "(" + generateExpressionString(functionCall.arg1, thisString) + ")"
-                    ThreeArgDateFunction:
-                      return '''Utils.addTime(«generateExpressionString(functionCall.arg1, thisString)», «generateExpressionString(functionCall.value, thisString)», "«functionCall.timeUnit»")'''
+                    ThreeArgDateFunction: {
+                      // L4: a bare Event variable as arg1 means "n units after
+                      // the event's occurrence" -- use its ._timestamp. A date
+                      // attribute (event.attr) or a Date parameter is emitted
+                      // unchanged.
+                      val a1 = functionCall.arg1
+                      val a1IsEventVar = a1 instanceof AtomicExpressionParameter
+                        && (a1 as AtomicExpressionParameter).value instanceof VariableRef
+                        && !generateDotExpressionType((a1 as AtomicExpressionParameter).value).empty
+                      val a1Str = a1IsEventVar
+                        ? generateExpressionString(a1, thisString) + "._timestamp"
+                        : generateExpressionString(a1, thisString)
+                      return '''Utils.addTime(«a1Str», «generateExpressionString(functionCall.value, thisString)», "«functionCall.timeUnit»")'''
+                    }
                 //  TwoArgUserFunction:
                  //     return functionCall.name + "(" + functionCall.arg1.toString() + "," +
                   //      functionCall.arg2.toString() + ")"
