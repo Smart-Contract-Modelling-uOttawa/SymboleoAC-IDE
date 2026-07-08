@@ -66,38 +66,65 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
   List<Variable> variables;
   List<Parameter> parameters;
 
+  private static String withUpperInitial(String name) {
+    return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+  }
+
+  private static String withLowerInitial(String name) {
+    return Character.toLowerCase(name.charAt(0)) + name.substring(1);
+  }
+
   @Check(CheckType.FAST)
   public void checkDomainTypesStartWithCapital(DomainType type) {
     if (!Character.isUpperCase(type.getName().charAt(0))) {
-      error("Domain types should start with a capital letter", type, SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+      error("Domain type name '" + type.getName() + "' must start with a "
+          + "capital letter (type names become class names in the generated "
+          + "code). Rename it to '" + withUpperInitial(type.getName())
+          + "' here and at every reference.", type,
+          SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
     }
   }
 
   @Check(CheckType.FAST)
   public void checkParametersStartWithLowerCase(Parameter p) {
     if (!Character.isLowerCase(p.getName().charAt(0))) {
-      error("Parameter name should start with a lowercase letter", p, SymboleoPackage.Literals.PARAMETER__NAME);
+      error("Contract parameter name '" + p.getName() + "' must start with a "
+          + "lowercase letter (capitalized names are reserved for domain "
+          + "types). Rename it to '" + withLowerInitial(p.getName())
+          + "' here and at every reference.", p,
+          SymboleoPackage.Literals.PARAMETER__NAME);
     }
   }
 
   @Check(CheckType.FAST)
   public void checkVariablesStartWithLowerCase(Variable v) {
     if (!Character.isLowerCase(v.getName().charAt(0))) {
-      error("Variable name should start with a lowercase letter", v, SymboleoPackage.Literals.VARIABLE__NAME);
+      error("Variable name '" + v.getName() + "' must start with a lowercase "
+          + "letter (capitalized names are reserved for domain types). Rename "
+          + "it to '" + withLowerInitial(v.getName())
+          + "' here and at every reference.", v,
+          SymboleoPackage.Literals.VARIABLE__NAME);
     }
   }
 
   @Check(CheckType.FAST)
   public void checkObligationsStartWithLowerCase(Obligation o) {
     if (!Character.isLowerCase(o.getName().charAt(0))) {
-      error("Obligation name should start with a lowercase letter", o, SymboleoPackage.Literals.OBLIGATION__NAME);
+      error("Obligation name '" + o.getName() + "' must start with a "
+          + "lowercase letter. Rename it to '" + withLowerInitial(o.getName())
+          + "' here and at every reference (e.g. obligations."
+          + withLowerInitial(o.getName()) + ").", o,
+          SymboleoPackage.Literals.OBLIGATION__NAME);
     }
   }
 
   @Check(CheckType.FAST)
   public void checkPowersStartWithLowerCase(Power o) {
     if (!Character.isLowerCase(o.getName().charAt(0))) {
-      error("Power name should start no valuable input a lowercase letter", o, SymboleoPackage.Literals.POWER__NAME);
+      error("Power name '" + o.getName() + "' must start with a lowercase "
+          + "letter. Rename it to '" + withLowerInitial(o.getName())
+          + "' here and at every reference.", o,
+          SymboleoPackage.Literals.POWER__NAME);
     }
   }
 
@@ -113,14 +140,22 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
 
     for (Parameter x : model.getParameters()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate identifier " + x.getName(), x, SymboleoPackage.Literals.PARAMETER__NAME);
+        error("Duplicate identifier '" + x.getName() + "': contract "
+            + "parameters and declared instances share one namespace, and "
+            + "this name is already taken. Rename or remove one of the two "
+            + "declarations (update every reference to the renamed one).", x,
+            SymboleoPackage.Literals.PARAMETER__NAME);
       }
       identifiers.add(x.getName());
     }
 
     for (Variable x : model.getVariables()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate identifier " + x.getName(), x, SymboleoPackage.Literals.VARIABLE__NAME);
+        error("Duplicate identifier '" + x.getName() + "': contract "
+            + "parameters and declared instances share one namespace, and "
+            + "this name is already taken. Rename or remove one of the two "
+            + "declarations (update every reference to the renamed one).", x,
+            SymboleoPackage.Literals.VARIABLE__NAME);
       }
       identifiers.add(x.getName());
     }
@@ -136,24 +171,31 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
 
     for (Obligation x : model.getObligations()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate identifier " + x.getName(), x, SymboleoPackage.Literals.OBLIGATION__NAME);
+        error(duplicateNormMessage(x.getName()), x, SymboleoPackage.Literals.OBLIGATION__NAME);
       }
       identifiers.add(x.getName());
     }
 
     for (Obligation x : model.getSurvivingObligations()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate identifier " + x.getName(), x, SymboleoPackage.Literals.OBLIGATION__NAME);
+        error(duplicateNormMessage(x.getName()), x, SymboleoPackage.Literals.OBLIGATION__NAME);
       }
       identifiers.add(x.getName());
     }
 
     for (Power x : model.getPowers()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate identifier " + x.getName(), x, SymboleoPackage.Literals.POWER__NAME);
+        error(duplicateNormMessage(x.getName()), x, SymboleoPackage.Literals.POWER__NAME);
       }
       identifiers.add(x.getName());
     }
+  }
+
+  private static String duplicateNormMessage(String name) {
+    return "Duplicate norm identifier '" + name + "': obligations, surviving "
+        + "obligations, and powers share one namespace (powers reference them "
+        + "as obligations.<name>), and this name is already taken. Rename one "
+        + "of the two norms and update every reference to it.";
   }
 
   /*
@@ -167,7 +209,10 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       // iterate over all properties of the model
       for (Attribute atr : Helpers.getAttributesOfRegularType((RegularType) type)) {
         if (identifiers.contains(atr.getName())) {
-          error("Duplicate attribute name '" + atr.getName() + "' in " + type.getName(), atr,
+          error("Duplicate attribute name '" + atr.getName() + "' in domain "
+              + "type '" + type.getName() + "'. Attributes inherited through "
+              + "isA count too, so the clash may be with a supertype's "
+              + "attribute. Rename or remove one of the two declarations.", atr,
               SymboleoPackage.Literals.ATTRIBUTE__NAME);
         }
         identifiers.add(atr.getName());
@@ -189,7 +234,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
           AttributeModifier mod = atr.getAttributeModifier();
           // if is not a type of Event and Env is used then show error
           if (mod.getName().equalsIgnoreCase("Env") && !isEvent) {
-            error("Env can only be used inside Event types: '" + atr.getName() + "' in " + type.getName(), atr,
+            error("The 'Env' modifier on attribute '" + atr.getName() + "' of '"
+                + type.getName() + "' is only allowed inside Event (or "
+                + "DataTransfer) types -- Env marks values the runtime supplies "
+                + "when the event happens. Remove the Env modifier, or make '"
+                + type.getName() + "' an Event subtype (isA ... isA Event).", atr,
                 SymboleoPackage.Literals.ATTRIBUTE__NAME);
           }
         }
@@ -215,13 +264,21 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         AttributeModifier mod = atr.getAttributeModifier();
         // Env values shall not be set
         if (mod.getName().equalsIgnoreCase("Env") && isInitiated) {
-          error("Env attribute '" + ((AssignExpression) res.get()).getName() + "' in " + type.getName()
-              + " shall not be initialized.", res.get(), SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
+          error("Env attribute '" + ((AssignExpression) res.get()).getName()
+              + "' of type '" + type.getName() + "' must not be assigned in a "
+              + "declaration -- Env values are supplied by the runtime "
+              + "environment when the event happens. Remove the ':=' "
+              + "assignment for it from the declaration of '" + var.getName()
+              + "'.", res.get(), SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
         }
       } else if (!isInitiated && !atr.getName().equalsIgnoreCase("_timestamp")) {
         // all other attributes should be initiated
-        error("Attribute '" + atr.getName() + "' is not initialized in variable '" + var.getName() + "'. ", var,
-            SymboleoPackage.Literals.VARIABLE__ATTRIBUTES);
+        error("Attribute '" + atr.getName() + "' of type '" + type.getName()
+            + "' is not assigned in the declaration of '" + var.getName()
+            + "'. Every non-Env attribute must be assigned: add '"
+            + atr.getName() + " := <value>' to the 'with' clause (only "
+            + "Env attributes are left unassigned, for the runtime to fill).",
+            var, SymboleoPackage.Literals.VARIABLE__ATTRIBUTES);
       }
     }
   }
@@ -240,10 +297,21 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       AssignExpression asgExp = (AssignExpression) assignment;
       Optional<Attribute> res = attributes.stream().filter(atr -> atr.getName().equals(asgExp.getName())).findFirst();
       if (res.isEmpty()) {
-        error("Attribute '" + asgExp.getName() + "' in " + var.getName() + " is not defined in model '" + type.getName()
-            + "'.", assignment, SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
+        error("The declaration of '" + var.getName() + "' assigns '"
+            + asgExp.getName() + "', but its type '" + type.getName()
+            + "' declares no attribute with that name (inherited attributes "
+            + "were checked too). Fix the attribute name, add the attribute "
+            + "to the type, or remove the assignment.", assignment,
+            SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
       }
     }
+  }
+
+  private static String roleMessage(String position, String normKind, String name) {
+    return "The " + position + " of " + normKind + " '" + name + "' must be a "
+        + "role instance: a variable or contract parameter whose type is "
+        + "declared 'isA Role'. Reference a Role-typed variable/parameter "
+        + "here, or change the referenced element's type so it isA Role.";
   }
 
   /*
@@ -263,11 +331,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) debtorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Debtor value in '" + power.getName() + "' is not type of Role.'", power,
+          error(roleMessage("debtor", "power", power.getName()), power,
               SymboleoPackage.Literals.POWER__DEBTOR);
         }
       } else {
-        error("Debtor value in '" + power.getName() + "' is not type of Role.'", power,
+        error(roleMessage("debtor", "power", power.getName()), power,
             SymboleoPackage.Literals.POWER__DEBTOR);
       }
 
@@ -282,11 +350,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) creditorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Creditor value in '" + power.getName() + "' is not type of Role.'", power,
+          error(roleMessage("creditor", "power", power.getName()), power,
               SymboleoPackage.Literals.POWER__CREDITOR);
         }
       } else {
-        error("Creditor value in '" + power.getName() + "' is not type of Role.'", power,
+        error(roleMessage("creditor", "power", power.getName()), power,
             SymboleoPackage.Literals.POWER__CREDITOR);
       }
     }
@@ -304,11 +372,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) debtorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Debtor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+          error(roleMessage("debtor", "obligation", obligation.getName()), obligation,
               SymboleoPackage.Literals.OBLIGATION__DEBTOR);
         }
       } else {
-        error("Debtor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+        error(roleMessage("debtor", "obligation", obligation.getName()), obligation,
             SymboleoPackage.Literals.OBLIGATION__DEBTOR);
       }
       // check creditor type
@@ -322,11 +390,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) creditorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Creditor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+          error(roleMessage("creditor", "obligation", obligation.getName()), obligation,
               SymboleoPackage.Literals.OBLIGATION__CREDITOR);
         }
       } else {
-        error("Creditor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+        error(roleMessage("creditor", "obligation", obligation.getName()), obligation,
             SymboleoPackage.Literals.OBLIGATION__CREDITOR);
       }
     }
@@ -344,11 +412,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) debtorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Debtor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+          error(roleMessage("debtor", "obligation", obligation.getName()), obligation,
               SymboleoPackage.Literals.OBLIGATION__DEBTOR);
         }
       } else {
-        error("Debtor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+        error(roleMessage("debtor", "obligation", obligation.getName()), obligation,
             SymboleoPackage.Literals.OBLIGATION__DEBTOR);
       }
       // check creditor type
@@ -362,11 +430,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) creditorType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("Creditor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+          error(roleMessage("creditor", "obligation", obligation.getName()), obligation,
               SymboleoPackage.Literals.OBLIGATION__CREDITOR);
         }
       } else {
-        error("Creditor value in '" + obligation.getName() + "' is not type of Role.'", obligation,
+        error(roleMessage("creditor", "obligation", obligation.getName()), obligation,
             SymboleoPackage.Literals.OBLIGATION__CREDITOR);
       }
     }
@@ -381,7 +449,12 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     // each VariableRef in VariableDotExpression should be declared first
     EObject typeObject = Helpers.getDotExpressionType(var, this.variables, this.parameters);
     if (typeObject == null) {
-      error("Variable '" + var.getVariable() + " is not defined.", var,
+      error("'" + var.getVariable() + "' is not declared: it is neither a "
+          + "declared instance (Declarations section) nor a contract "
+          + "parameter. Declare it (e.g. '" + var.getVariable()
+          + ": SomeType with attr := ...;'), add it to the contract's "
+          + "parameter list, or fix the reference -- identifiers are "
+          + "case-sensitive.", var,
           SymboleoPackage.Literals.VARIABLE_REF__VARIABLE);
     }
   }
@@ -422,8 +495,12 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
             }
             if (!typeRes.type.equals(atrType)) {
               // if type does not match
-              error("Type of '" + asgExp.getName() + "' in " + var.getName() + " is " + atrType + ", it does not match "
-                  + typeRes.type, asg, SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
+              error("Type mismatch in the declaration of '" + var.getName()
+                  + "': attribute '" + asgExp.getName() + "' is declared as '"
+                  + atrType + "' but the assigned expression has type '"
+                  + typeRes.type + "'. Change the assigned value to a '"
+                  + atrType + "', or change the attribute's declared type.",
+                  asg, SymboleoPackage.Literals.ASSIGN_EXPRESSION__NAME);
             }
           }
 //          else if (asg instanceof AssignVariable) {
@@ -443,6 +520,14 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     }
   }
 
+  private static String argTypeMessage(String ordinal, String func,
+      String expected, String found) {
+    return "The " + ordinal + " argument of '" + func + "' must be a "
+        + expected + ", but the given expression has type '" + found
+        + "'. Pass a " + expected + "-typed expression (a literal, a "
+        + "contract parameter, or an attribute of that type).";
+  }
+
   /*
    * check type of internal functions
    */
@@ -456,7 +541,7 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       error(typeRes.message, typeRes.error, typeRes.ref);
     }
     if (!typeRes.type.equals("Number")) {
-      error("First argument of '" + function.getName() + "' should be a Number.", function,
+      error(argTypeMessage("first", function.getName(), "Number", typeRes.type), function,
           SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
     }
     warnUnsupportedFunction(function);
@@ -480,11 +565,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       error(typeRes2.message, typeRes2.error, typeRes2.ref);
     }
     if (!typeRes.type.equals("Number")) {
-      error("First argument of '" + function.getName() + "' should be a Number.", function,
+      error(argTypeMessage("first", function.getName(), "Number", typeRes.type), function,
           SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
     }
     if (!typeRes2.type.equals("Number")) {
-      error("Second argument of '" + function.getName() + "' should be a Number.", function,
+      error(argTypeMessage("second", function.getName(), "Number", typeRes2.type), function,
           SymboleoPackage.Literals.TWO_ARG_MATH_FUNCTION__ARG2);
     }
     //Only warn if the function is Math.pow 
@@ -506,7 +591,7 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       error(typeRes.message, typeRes.error, typeRes.ref);
     }
     if (!typeRes.type.equals("String")) {
-      error("First argument of '" + function.getName() + "' should be a String.", function,
+      error(argTypeMessage("first", function.getName(), "String", typeRes.type), function,
           SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
     }
     warnUnsupportedFunction(function);
@@ -530,11 +615,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       error(typeRes2.message, typeRes2.error, typeRes2.ref);
     }
     if (!typeRes.type.equals("String")) {
-      error("First argument of '" + function.getName() + "' should be a String.", function,
+      error(argTypeMessage("first", function.getName(), "String", typeRes.type), function,
           SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
     }
     if (!typeRes2.type.equals("String")) {
-      error("Second argument of '" + function.getName() + "' should be a String.", function,
+      error(argTypeMessage("second", function.getName(), "String", typeRes2.type), function,
           SymboleoPackage.Literals.TWO_ARG_STRING_FUNCTION__ARG2);
     }
     warnUnsupportedFunction(function);
@@ -564,27 +649,27 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       error(typeRes.message, typeRes.error, typeRes.ref);
     }
     if (!typeRes.type.equals("String")) {
-      error("First argument of '" + function.getName() + "' should be a String.", function,
+      error(argTypeMessage("first", function.getName(), "String", typeRes.type), function,
           SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
     }
 
     if (function.getName().equals("String.replace") || function.getName().equals("String.replaceAll")) {
       if (!typeRes2.type.equals("String")) {
-        error("Second argument of '" + function.getName() + "' should be a String.", function,
+        error(argTypeMessage("second", function.getName(), "String", typeRes2.type), function,
             SymboleoPackage.Literals.THREE_ARG_STRING_FUNCTION__ARG2);
       }
       if (!typeRes3.type.equals("String")) {
-        error("Third argument of '" + function.getName() + "' should be a String.", function,
+        error(argTypeMessage("third", function.getName(), "String", typeRes3.type), function,
             SymboleoPackage.Literals.THREE_ARG_STRING_FUNCTION__ARG3);
       }
     } else if (function.getName().equals("String.substring")) {
       // second and third args of substring are number
       if (!typeRes2.type.equals("Number")) {
-        error("Second argument of '" + function.getName() + "' should be a Number.", function,
+        error(argTypeMessage("second", function.getName(), "Number", typeRes2.type), function,
             SymboleoPackage.Literals.THREE_ARG_STRING_FUNCTION__ARG2);
       }
       if (!typeRes3.type.equals("Number")) {
-        error("Third argument of '" + function.getName() + "' should be a Number.", function,
+        error(argTypeMessage("third", function.getName(), "Number", typeRes3.type), function,
             SymboleoPackage.Literals.THREE_ARG_STRING_FUNCTION__ARG3);
       }
     }
@@ -605,7 +690,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         error(typeRes.message, typeRes.error, typeRes.ref);
       }
       if (!typeRes.type.equals("Date")) {
-        error("First argument of '" + function.getName() + "' should be a Date.", function,
+        error("The first argument of '" + function.getName() + "' must be a "
+            + "Date, but the given expression has type '" + typeRes.type
+            + "'. Pass a date point: a Date-typed contract parameter, a date "
+            + "attribute of an event (e.g. delivered.delDueDate), or another "
+            + "Date.add(...) expression.", function,
             SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
       }
 
@@ -616,7 +705,7 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         error(typeRes2.message, typeRes2.error, typeRes2.ref);
       }
       if (!typeRes2.type.equals("Number")) {
-        error("Second argument of '" + function.getName() + "' should be a Number.", function,
+        error(argTypeMessage("second", function.getName(), "Number", typeRes2.type), function,
             SymboleoPackage.Literals.THREE_ARG_DATE_FUNCTION__VALUE);
       }
 
@@ -632,22 +721,36 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     // get type of VariableDotExpression
     EObject typeRes = Helpers.getDotExpressionType(event.getVariable(), this.variables, this.parameters);
     if (!(typeRes instanceof RegularType)) {
-      error("Only variable of type Event is allowed", event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
+      error(eventVariableMessage(event), event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
       return;
     }
     // get the parent type
     RegularType dt = (RegularType) typeRes;
     RegularType type = Helpers.getBaseType(dt);
     if (type == null) {
-      error("Only variable of type Event is allowed", event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
+      error(eventVariableMessage(event), event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
     } else if (!(type.getOntologyType().getName().equalsIgnoreCase("event") || type.getOntologyType().getName().equalsIgnoreCase("datatransfer") )) {
-      error("Only variable of type Event is allowed", event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
+      error(eventVariableMessage(event), event, SymboleoPackage.Literals.VARIABLE_EVENT__VARIABLE);
     }
   }
 
+  private static String eventVariableMessage(VariableEvent event) {
+    String name = baseVariableName(event.getVariable());
+    String subject = name != null ? "'" + name + "'" : "The referenced element";
+    return subject + " cannot be used as an event here: predicates such as "
+        + "Happens/HappensBefore/HappensWithin accept only a variable whose "
+        + "declared type is (transitively) 'isA Event' (or DataTransfer). "
+        + "Reference an event variable instead, or change the variable's "
+        + "type so it isA Event.";
+  }
+
   private void warnUnsupportedFunction(FunctionCall function) {
-    warning("Warning: Function '" + function.getName() + "' is not supported in nuXmv. Skipping it in the .smv file.",
-            function, SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
+    warning("Function '" + function.getName() + "' is not supported by the "
+        + "nuXmv model checker and will be skipped in the generated .smv "
+        + "model -- formal verification (SymboleoPC) will not see this "
+        + "expression. Smart-contract code generation and execution are "
+        + "unaffected; no change is needed unless you rely on model checking.",
+        function, SymboleoPackage.Literals.FUNCTION_CALL__ARG1);
   }
   
   /*
@@ -672,11 +775,17 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) accessedRoleType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("accessedRole value in '" + rule.getName() + "' is not type of Role.'", rule,
+          error("The role granted access in rule '" + rule.getName() + "' (the 'To ...' "
+            + "part) must be a role instance: a variable or contract parameter "
+            + "whose type is declared 'isA Role'. Reference a Role-typed "
+            + "variable/parameter, or fix its type declaration.", rule,
               SymboleoPackage.Literals.RULE__ACCESSED_ROLE);
         }
       } else {
-        error("accessedRole value in '" + rule.getName() + "' is not type of Role.'", rule,
+        error("The role granted access in rule '" + rule.getName() + "' (the 'To ...' "
+            + "part) must be a role instance: a variable or contract parameter "
+            + "whose type is declared 'isA Role'. Reference a Role-typed "
+            + "variable/parameter, or fix its type declaration.", rule,
             SymboleoPackage.Literals.RULE__ACCESSED_ROLE);
       }
 
@@ -690,7 +799,10 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         // error if it is not a Role
         RegularType base = Helpers.getBaseType((DomainType) controllerType);
         if (base == null || base != null && !base.getOntologyType().getName().equals("Role")) {
-          error("controller value in '" + rule.getName() + "' is not type of Role.'", rule,
+          error("The granting role in rule '" + rule.getName() + "' (the 'By ...' part) "
+            + "must be a role instance: a variable or contract parameter whose "
+            + "type is declared 'isA Role'. Reference a Role-typed "
+            + "variable/parameter, or fix its type declaration.", rule,
               SymboleoPackage.Literals.RULE__CONTROLLER);
         } else{///////////////////////////////////////////////////////////////////////****************************************************
         	/*
@@ -735,7 +847,10 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         	//////////////////////////////////////////////////////////////////////////*****************************************************
         }
       } else {
-        error("controller value in '" + rule.getName() + "' is not type of Role.'", rule,
+        error("The granting role in rule '" + rule.getName() + "' (the 'By ...' part) "
+            + "must be a role instance: a variable or contract parameter whose "
+            + "type is declared 'isA Role'. Reference a Role-typed "
+            + "variable/parameter, or fix its type declaration.", rule,
             SymboleoPackage.Literals.RULE__CONTROLLER);
       }
     }// end for loop
@@ -763,11 +878,17 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
           RegularType baseType = Helpers.getBaseType((DomainType) resolvedType);
           //System.out.println("after RegularType type if" + baseType);
           if (baseType == null || baseType != null && !baseType.getOntologyType().getName().equals("Role")) {
-            error("Controller must be of type 'Role'.", controller,
+            error("Each controller listed in the ACPolicy must be a role "
+              + "instance: a variable or contract parameter whose type is "
+              + "declared 'isA Role'. Reference a Role-typed "
+              + "variable/parameter, or fix its type declaration.", controller,
             		SymboleoPackage.Literals.CONTROLLER__CONTROLLER_TYPE);
           }
         } else {
-          error("Controller must be of type 'Role'.", controller,
+          error("Each controller listed in the ACPolicy must be a role "
+              + "instance: a variable or contract parameter whose type is "
+              + "declared 'isA Role'. Reference a Role-typed "
+              + "variable/parameter, or fix its type declaration.", controller,
         		  SymboleoPackage.Literals.CONTROLLER__CONTROLLER_TYPE);
         }
       }
@@ -897,11 +1018,19 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
    *           E12a inheritance cycles (an error rather than a lint because a
    *                cycle previously crashed the compiler's own helpers).
    * (W8, arithmetic in an obligation consequent, was retired when the
-   * LegalSituation metadata-builder defect it warned about — SymboleoAC2SC#3
-   * — was fixed in Symboleo2SC.xtend.)
+   * LegalSituation metadata-builder defect it warned about -- SymboleoAC2SC#3
+   * -- was fixed in Symboleo2SC.xtend.)
+   * Warnings: W13 unused definitions -- domain types, contract parameters,
+   *               and declared instances that nothing references.
    * Lints:    L9 permission giver should own/control/perform the resource;
    *           L11 dormant conditional norms;
    *           L12b cycles among variable initializations.
+   *
+   * Message convention (all tiers, including the pre-C7 checks above): every
+   * diagnostic states (1) what is wrong, naming the offending element,
+   * (2) why it matters downstream, and (3) how to fix it -- the messages are
+   * consumed both by humans and by LLMs running compile-fix loops, so they
+   * must be actionable without access to this source file.
    * ==========================================================================
    */
 
@@ -983,9 +1112,12 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
             return; // Role-typed performer present
           }
         }
-        error("Event type '" + type.getName() + "' declares a 'performer' that is "
-            + "not typed as a Role; the generated code and the access-control "
-            + "layer require a Role-typed performer.", type,
+        error("Event type '" + type.getName() + "' declares a 'performer' that "
+            + "is not typed as a Role; the generated code and the "
+            + "access-control layer require a Role-typed performer. Change "
+            + "its type to a domain type declared 'isA Role' (e.g. "
+            + "'performer: Seller' where 'Seller isA Role with name: String, "
+            + "org: String, dept: String').", type,
             SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
         return;
       }
@@ -1056,7 +1188,10 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     Set<String> identifiers = new HashSet<>();
     for (Rule x : model.getRules()) {
       if (identifiers.contains(x.getName())) {
-        error("Duplicate rule identifier " + x.getName(), x,
+        error("Duplicate access-control rule name '" + x.getName() + "': every "
+            + "rule in the ACPolicy section must have a unique name (the "
+            + "generated policy indexes rules by name, so a duplicate would "
+            + "silently shadow the earlier rule). Rename this rule.", x,
             SymboleoPackage.Literals.RULE__NAME);
       }
       identifiers.add(x.getName());
@@ -1094,9 +1229,12 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     }
     if (!missing.isEmpty()) {
       error("Role type '" + type.getName() + "' is missing the access-control "
-          + "attribute(s) " + missing + "; the generated authenticate() matches "
-          + "the caller's certificate against name/org/dept, so a role without "
-          + "them cannot be authorized on-chain.", type,
+          + "attribute(s) " + missing + ": the generated authenticate() "
+          + "matches the caller's certificate against name/org/dept, so a "
+          + "role without them cannot be authorized on-chain (it fails with "
+          + "an opaque \"Unauthorized\"). Declare all three, e.g. '"
+          + type.getName() + " isA Role with name: String, org: String, "
+          + "dept: String;'.", type,
           SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
     }
   }
@@ -1113,11 +1251,87 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
     while (current != null) {
       if (!visited.add(current)) {
         error("Inheritance cycle: domain type '" + type.getName()
-            + "' is (transitively) declared as a subtype of itself.", type,
+            + "' is (transitively) declared as a subtype of itself, so its "
+            + "attributes cannot be resolved. Break the cycle by removing or "
+            + "retargeting one of the 'isA' links in the chain (the topmost "
+            + "type should extend an ontology type such as Role, Asset, or "
+            + "Event).", type,
             SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
         return;
       }
       current = current.getRegularType();
+    }
+  }
+
+  /*
+   * C7-W13: unused definitions. A domain type, contract parameter, or
+   * declared instance that nothing references is either leftover from an
+   * edit or a sign that an intended reference was never written. It also
+   * has a real cost: every domain type generates a class, every parameter
+   * must be supplied at instantiation, and every declared instance is
+   * initialized in the deployed smart contract.
+   *
+   * Reference mechanics (they differ, deliberately handled separately):
+   * - variables and parameters are referenced BY NAME through dot
+   *   expressions (VariableRef holds a plain string), so usage is a scan
+   *   for VariableRef leaves anywhere in the model;
+   * - domain types are referenced through real EMF cross-references
+   *   (a declaration's type, a parameter's type, an attribute's type, an
+   *   isA supertype, an enumeration literal), so usage is a scan of
+   *   eCrossReferences targets.
+   * A definition referenced only by another unused definition counts as
+   * used; fixing the first warning surfaces the next one (cascade).
+   */
+  @Check(CheckType.FAST)
+  public void checkUnusedDefinitions(Model model) {
+    Set<String> referencedNames = new HashSet<>();
+    Set<DomainType> referencedTypes = new HashSet<>();
+    TreeIterator<EObject> it = model.eAllContents();
+    while (it.hasNext()) {
+      EObject node = it.next();
+      if (node instanceof VariableRef) {
+        referencedNames.add(((VariableRef) node).getVariable());
+      }
+      for (EObject target : node.eCrossReferences()) {
+        if (target instanceof DomainType) {
+          referencedTypes.add((DomainType) target);
+        }
+      }
+    }
+
+    for (Parameter p : model.getParameters()) {
+      if (!referencedNames.contains(p.getName())) {
+        warning("Contract parameter '" + p.getName() + "' is never used: no "
+            + "norm, declaration, constraint, or access-control rule references "
+            + "it. Every parameter must be supplied when the contract is "
+            + "instantiated, so an unused one burdens every deployment. Remove "
+            + "'" + p.getName() + "' from the contract's parameter list (and "
+            + "from instantiation call sites), or add the reference that was "
+            + "intended.", p, SymboleoPackage.Literals.PARAMETER__NAME);
+      }
+    }
+
+    for (Variable v : model.getVariables()) {
+      if (!referencedNames.contains(v.getName())) {
+        warning("Declared instance '" + v.getName() + "' is never used: no "
+            + "obligation, power, precondition, postcondition, constraint, "
+            + "access-control rule, or other declaration references it. It "
+            + "would still be initialized in the deployed smart contract. "
+            + "Remove the declaration from the Declarations section, or add "
+            + "the reference that was intended.", v,
+            SymboleoPackage.Literals.VARIABLE__NAME);
+      }
+    }
+
+    for (DomainType t : model.getDomainTypes()) {
+      if (!referencedTypes.contains(t)) {
+        warning("Domain type '" + t.getName() + "' is never used: no "
+            + "declaration, parameter, attribute, isA subtype, or enumeration "
+            + "reference mentions it. Every domain type generates a class in "
+            + "the smart contract. Remove the type from the Domain section, or "
+            + "add the declaration/attribute that was meant to use it.", t,
+            SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
+      }
     }
   }
 
@@ -1162,8 +1376,14 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       }
       if (sawRelevantAssignment && !giverMatches) {
         info("Rule '" + rule.getName() + "': the granting role '" + controllerName
-            + "' is not the owner, controller, or performer of resource '"
-            + resourceVarName + "'.", rule, SymboleoPackage.Literals.RULE__CONTROLLER);
+            + "' (after 'By') is not the owner, controller, or performer of "
+            + "resource '" + resourceVarName + "', so it has no evident "
+            + "authority to grant access to it. If this is unintended, grant "
+            + "'By' the resource's owner/controller/performer instead, or make '"
+            + controllerName + "' one of them in the declaration of '"
+            + resourceVarName + "'. If the grant is deliberate (e.g. delegated "
+            + "authority), this note can be ignored.", rule,
+            SymboleoPackage.Literals.RULE__CONTROLLER);
       }
     }
   }
@@ -1235,19 +1455,25 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
         }
         if (!referencedElsewhere) {
           if (norm instanceof Obligation) {
-            info("Norm '" + ((Obligation) norm).getName() + "' may be dormant: its "
-                + "trigger waits on event '" + eventVar + "', which no other norm "
-                + "interacts with and which has no performer.", norm,
+            info(dormantMessage(((Obligation) norm).getName(), eventVar), norm,
                 SymboleoPackage.Literals.OBLIGATION__NAME);
           } else {
-            info("Norm '" + ((Power) norm).getName() + "' may be dormant: its "
-                + "trigger waits on event '" + eventVar + "', which no other norm "
-                + "interacts with and which has no performer.", norm,
+            info(dormantMessage(((Power) norm).getName(), eventVar), norm,
                 SymboleoPackage.Literals.POWER__NAME);
           }
         }
       }
     }
+  }
+
+  private static String dormantMessage(String normName, String eventVar) {
+    return "Norm '" + normName + "' may be dormant: its trigger waits on "
+        + "event '" + eventVar + "', which no other norm interacts with and "
+        + "whose type declares no performer, so no party is modelled as able "
+        + "to bring it about. If the norm should be reachable, give the "
+        + "event's type a Role-typed performer or reference the event from "
+        + "the norm that produces it; if the event is supplied purely by the "
+        + "environment, this note can be ignored.";
   }
 
   private static Set<String> collectEventVariableNames(EObject proposition) {
@@ -1336,7 +1562,11 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
       if (hasPathBackTo(v.getName(), v.getName(), edges, new HashSet<>())) {
         reported.add(v.getName());
         info("Variable '" + v.getName() + "' participates in an initialization "
-            + "cycle (its declaration transitively references itself).", v,
+            + "cycle: its declaration (transitively) references itself through "
+            + "the ':=' assignments, so the instances cannot be constructed in "
+            + "a well-defined order. Break the cycle by initializing one of "
+            + "the variables involved from a literal or a contract parameter "
+            + "instead of from another declaration.", v,
             SymboleoPackage.Literals.VARIABLE__NAME);
       }
     }
