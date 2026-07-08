@@ -908,6 +908,16 @@ public class Symboleo2SC extends SymboleoGenerator {
       }
     }
     {
+      List<String> _compileTransferTransactions = this.compileTransferTransactions(model);
+      for(final String method_transfer : _compileTransferTransactions) {
+        _builder.append("       ");
+        _builder.append(method_transfer, "       ");
+        _builder.newLineIfNotEmpty();
+        _builder.append("       ");
+        _builder.newLine();
+      }
+    }
+    {
       List<String> _compileViolationEventsTransactions = this.compileViolationEventsTransactions(model);
       for(final String method_2 : _compileViolationEventsTransactions) {
         _builder.append("       ");
@@ -3649,6 +3659,138 @@ public class Symboleo2SC extends SymboleoGenerator {
       }
     }
     return con;
+  }
+
+  /**
+   * Phase 3 (O4b) transfer transactions -- see the xtend source for
+   * rationale. Emits one transferResource_<var> Fabric transaction per
+   * top-level resource carrying an explicit `Grant transfer` rule.
+   */
+  public List<String> compileTransferTransactions(final Model model) {
+    final ArrayList<String> methods = new ArrayList<String>();
+    final java.util.HashSet<String> seen = new java.util.HashSet<String>();
+    for (final Rule rule : model.getRules()) {
+      // The grammar puts the DECISION into rule.action (grant/revoke) and
+      // the ACTION into rule.permission ({read,write,all,transfer}); we
+      // match the ontology's Action here, not its Decision.
+      Permission _perm = rule.getPermission();
+      String _permName = _perm == null ? null : _perm.getName();
+      if (_permName != null && "transfer".equalsIgnoreCase(_permName)
+          && rule.getAccessedResource() instanceof ResourceDot) {
+        final ResourceDot resourceDot = (ResourceDot) rule.getAccessedResource();
+        String baseName = this.generateDotExpressionString(resourceDot.getResourceDot(), "");
+        String trimmed = baseName.contains(".") ? baseName.substring(0, baseName.indexOf(".")) : baseName;
+        if (seen.add(trimmed)) {
+          methods.add(this.generateTransferTransaction(trimmed));
+        }
+      }
+    }
+    return methods;
+  }
+
+  public String generateTransferTransaction(final String resourceVar) {
+    StringConcatenation _builder = new StringConcatenation();
+    _builder.append("async transferResource_");
+    _builder.append(resourceVar);
+    _builder.append("(ctx, contractId, newOwnerName, newOwnerOrg, newOwnerDept) {");
+    _builder.newLineIfNotEmpty();
+    _builder.append("  const cid = new ClientIdentity(ctx.stub);");
+    _builder.newLine();
+    _builder.append("  let actorRole;");
+    _builder.newLine();
+    _builder.append("  const contractState = await ctx.stub.getState(contractId);");
+    _builder.newLine();
+    _builder.append("  if (contractState == null) { return { successful: false } }");
+    _builder.newLine();
+    _builder.append("  const contract = deserialize(contractState.toString());");
+    _builder.newLine();
+    _builder.append("  this.initialize(contract);");
+    _builder.newLine();
+    _builder.append("  if (!contract.isInEffect() && !contract.isSuccessfulTermination()) {");
+    _builder.newLine();
+    _builder.append("    return { successful: false, message: \'Contract not in effect\' }");
+    _builder.newLine();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  if (contract.");
+    _builder.append(resourceVar);
+    _builder.append(" == null) {");
+    _builder.newLineIfNotEmpty();
+    _builder.append("    return { successful: false, message: \'Resource ");
+    _builder.append(resourceVar);
+    _builder.append(" not found\' }");
+    _builder.newLineIfNotEmpty();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  try {");
+    _builder.newLine();
+    _builder.append("    actorRole = contract.authenticate(");
+    _builder.newLine();
+    _builder.append("      cid.getAttributeValue(\'HF.role\'), cid.getAttributeValue(\'HF.name\'),");
+    _builder.newLine();
+    _builder.append("      cid.getAttributeValue(\'organization\'), cid.getAttributeValue(\'department\'), contract);");
+    _builder.newLine();
+    _builder.append("    if (actorRole === null) { throw new Error(\'Unauthorized: Unknown access\'); }");
+    _builder.newLine();
+    _builder.append("  } catch (err) {");
+    _builder.newLine();
+    _builder.append("    console.log(\'access control error: \', err);");
+    _builder.newLine();
+    _builder.append("    return { successful: false, message: err.message };");
+    _builder.newLine();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  const newOwnerRole = (contract._roles || []).find(r =>");
+    _builder.newLine();
+    _builder.append("    r.name && r.name._value === newOwnerName");
+    _builder.newLine();
+    _builder.append("    && r.org && r.org._value === newOwnerOrg");
+    _builder.newLine();
+    _builder.append("    && r.dept && r.dept._value === newOwnerDept);");
+    _builder.newLine();
+    _builder.append("  if (newOwnerRole == null) {");
+    _builder.newLine();
+    _builder.append("    return { successful: false, message: \'Unknown new-owner role\' };");
+    _builder.newLine();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  if (!contract.accessPolicy.transferResource(contract.");
+    _builder.append(resourceVar);
+    _builder.append(", actorRole, newOwnerRole)) {");
+    _builder.newLineIfNotEmpty();
+    _builder.append("    return { successful: false, message: \'Transfer denied by access-control policy\' };");
+    _builder.newLine();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  await ctx.stub.putState(contractId, Buffer.from(serialize(contract)));");
+    _builder.newLine();
+    _builder.append("  const MSG = `Ownership of ");
+    _builder.append(resourceVar);
+    _builder.append(" transferred to ${newOwnerName}, ${contractId}`;");
+    _builder.newLineIfNotEmpty();
+    _builder.append("  contract.notified.message.push({");
+    _builder.newLine();
+    _builder.append("    name: \'contract.");
+    _builder.append(resourceVar);
+    _builder.append("\', message: MSG,");
+    _builder.newLineIfNotEmpty();
+    _builder.append("    roles: [actorRole.name._value, newOwnerRole.name._value],");
+    _builder.newLine();
+    _builder.append("    time: new Date().toISOString()");
+    _builder.newLine();
+    _builder.append("  });");
+    _builder.newLine();
+    _builder.append("  for (const message of contract.notified.message) {");
+    _builder.newLine();
+    _builder.append("    this.trigger_notification(ctx, message);");
+    _builder.newLine();
+    _builder.append("  }");
+    _builder.newLine();
+    _builder.append("  return { successful: true };");
+    _builder.newLine();
+    _builder.append("}");
+    _builder.newLine();
+    return _builder.toString();
   }
 
   public List<String> compilePowerTransactions(final Model model) {

@@ -395,7 +395,11 @@ class Symboleo2SC extends SymboleoGenerator {
         «ENDFOR»
         «FOR method : compilePowerTransactions(model)»
           «method»
-          
+
+        «ENDFOR»
+        «FOR method : compileTransferTransactions(model)»
+          «method»
+
         «ENDFOR»
         «FOR method : compileViolationEventsTransactions(model)»
           «method»
@@ -1373,6 +1377,95 @@ def String compileInitMethod(Model model) {
  
   //
   
+  // Phase 3 (O4b): emit one Fabric transaction per resource carrying an
+  // explicit `Grant transfer` rule -- the transferable assets by spec.
+  // The transaction authenticates the caller against a role, resolves the
+  // new holder by their certificate attributes (name/org/dept), and
+  // delegates to accessPolicy.transferResource, which enforces the
+  // permission and reassigns ownership. Ownership itself then conveys the
+  // right to endorse onward (sale in transit), so no further grant is
+  // needed on chained transfers.
+  def List<String> compileTransferTransactions(Model model) {
+    val methods = new ArrayList<String>
+    val seen = new java.util.HashSet<String>
+    for (rule : model.rules) {
+      // The grammar puts the DECISION into rule.action (grant/revoke) and
+      // the ACTION into rule.permission ({read,write,all,transfer}); we
+      // match the ontology's Action here, not its Decision.
+      val permName = rule.permission?.name
+      if ('transfer'.equalsIgnoreCase(permName)
+          && rule.accessedResource instanceof ResourceDot) {
+        val resourceDot = rule.accessedResource as ResourceDot
+        val baseName = generateDotExpressionString(resourceDot.resourceDot, "")
+        // Only the top-level variable can be transferred (its whole
+        // ownership moves); attribute-level transfer rules are grants on
+        // that attribute, not endorsements of the whole document.
+        val trimmed = baseName.contains(".") ? baseName.substring(0, baseName.indexOf(".")) : baseName
+        if (seen.add(trimmed)) {
+          methods.add(generateTransferTransaction(trimmed))
+        }
+      }
+    }
+    return methods
+  }
+
+  def String generateTransferTransaction(String resourceVar) '''
+    async transferResource_«resourceVar»(ctx, contractId, newOwnerName, newOwnerOrg, newOwnerDept) {
+      const cid = new ClientIdentity(ctx.stub);
+      let actorRole;
+      const contractState = await ctx.stub.getState(contractId);
+      if (contractState == null) {
+        return { successful: false }
+      }
+      const contract = deserialize(contractState.toString());
+      this.initialize(contract);
+
+      if (!contract.isInEffect() && !contract.isSuccessfulTermination()) {
+        return { successful: false, message: 'Contract not in effect' }
+      }
+      if (contract.«resourceVar» == null) {
+        return { successful: false, message: 'Resource «resourceVar» not found' }
+      }
+
+      try {
+        actorRole = contract.authenticate(
+          cid.getAttributeValue('HF.role'), cid.getAttributeValue('HF.name'),
+          cid.getAttributeValue('organization'), cid.getAttributeValue('department'), contract);
+        if (actorRole === null) {
+          throw new Error('Unauthorized: Unknown access');
+        }
+      } catch (err) {
+        console.log('access control error: ', err);
+        return { successful: false, message: err.message };
+      }
+
+      // Resolve the new holder from the caller-supplied identity attributes.
+      const newOwnerRole = (contract._roles || []).find(r =>
+        r.name && r.name._value === newOwnerName
+        && r.org && r.org._value === newOwnerOrg
+        && r.dept && r.dept._value === newOwnerDept);
+      if (newOwnerRole == null) {
+        return { successful: false, message: 'Unknown new-owner role' };
+      }
+
+      if (!contract.accessPolicy.transferResource(contract.«resourceVar», actorRole, newOwnerRole)) {
+        return { successful: false, message: 'Transfer denied by access-control policy' };
+      }
+
+      await ctx.stub.putState(contractId, Buffer.from(serialize(contract)));
+      const MSG = `Ownership of «resourceVar» transferred to ${newOwnerName}, ${contractId}`;
+      contract.notified.message.push({
+        name: 'contract.«resourceVar»', message: MSG,
+        roles: [actorRole.name._value, newOwnerRole.name._value],
+        time: new Date().toISOString()
+      });
+      for (const message of contract.notified.message) {
+        this.trigger_notification(ctx, message);
+      }
+      return { successful: true };
+    }
+  '''
+
   def List<String> compilePowerTransactions(Model model) {
     val methods = new ArrayList<String>
     for (power : model.powers) {
