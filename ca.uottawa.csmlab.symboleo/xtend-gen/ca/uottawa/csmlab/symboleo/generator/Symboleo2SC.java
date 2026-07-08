@@ -7124,7 +7124,8 @@ public class Symboleo2SC extends SymboleoGenerator {
         if ((_antecedent_2 instanceof PAtomPredicateTrueLiteral)) {
           _xifexpression = "true";
         } else {
-          _xifexpression = "!isNewInstance ";
+          String _generatePropositionString_ante = this.generatePropositionString(obligation.getAntecedent());
+          _xifexpression = (("!isNewInstance && (" + _generatePropositionString_ante) + ")");
         }
         _builder.append(_xifexpression, "        ");
         _builder.append(" ) { ");
