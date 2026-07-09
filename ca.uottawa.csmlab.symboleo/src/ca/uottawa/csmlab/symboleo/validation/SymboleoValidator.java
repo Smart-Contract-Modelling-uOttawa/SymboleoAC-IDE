@@ -892,6 +892,12 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
   @Check(CheckType.FAST)
   public void checkControllerType(Model model) {
 	  ACPolicy acpolicy = model.getAcpolicys();
+    // The ACPolicy section is optional; a spec without it is valid (it just has
+    // no access-control rules). Nothing to check, and dereferencing null here
+    // would crash validation (SymboleoAC2SC#4, sibling of the codegen NPE).
+    if (acpolicy == null) {
+      return;
+    }
     for (Controller controller : acpolicy.getController()) {
     	 Ref controllerType = controller.getControllerType();
     	 //System.out.println("before first if from dot expersstion" + controllerType);

@@ -1086,6 +1086,12 @@ def String getDefaultController(Model model, Variable variable){
 }
  
 def String getDefaultControllerACPolicy(Model model) {
+	// No ACPolicy section: emit an empty default-controller list. The AC policy
+	// is an optional (bracketed) section, so a spec without it is valid; the
+	// generated contract gets an empty ACPolicy rather than an NPE here
+	// (SymboleoAC2SC#4). model.rules (the Grant/Revoke rules) is a separate,
+	// always-empty-safe list, so nothing else needs guarding.
+	if (model.acpolicys === null) return "[]"
 	var acC="["
                         	var cnt=0
                 for(  Controller controller : model.acpolicys.getController()){
