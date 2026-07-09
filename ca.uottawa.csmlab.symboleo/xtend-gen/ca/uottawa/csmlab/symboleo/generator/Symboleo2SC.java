@@ -2959,6 +2959,9 @@ public class Symboleo2SC extends SymboleoGenerator {
   }
 
   public String getDefaultControllerACPolicy(final Model model) {
+    if ((model.getAcpolicys() == null)) {
+      return "[]";
+    }
     String acC = "[";
     int cnt = 0;
     EList<Controller> _controller = model.getAcpolicys().getController();
