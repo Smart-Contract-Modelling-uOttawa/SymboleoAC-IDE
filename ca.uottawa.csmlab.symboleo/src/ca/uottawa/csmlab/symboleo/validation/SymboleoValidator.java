@@ -1148,19 +1148,22 @@ public class SymboleoValidator extends AbstractSymboleoValidator {
             return; // Role-typed performer present
           }
         }
-        error("Event type '" + type.getName() + "' declares a 'performer' that "
-            + "is not typed as a Role; the generated code and the "
-            + "access-control layer require a Role-typed performer. Change "
-            + "its type to a domain type declared 'isA Role' (e.g. "
-            + "'performer: Seller' where 'Seller isA Role with name: String, "
-            + "org: String, dept: String').", type,
+        error("Event type '" + type.getName() + "' declares a 'performer' whose "
+            + "type is not a role. Change it to a domain type you declared with "
+            + "'isA Role'. For example 'performer: Seller', given 'Seller isA "
+            + "Role with name: String, org: String, dept: String;'. Write that "
+            + "role's own name: 'performer: Role' uses the base word and does "
+            + "not parse.", type,
             SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
         return;
       }
     }
-    error("Event type '" + type.getName() + "' must declare a Role-typed "
-        + "'performer' attribute (e.g. 'performer: Seller'); without it the "
-        + "generated event cannot be triggered on-chain.", type,
+    error("Event type '" + type.getName() + "' must declare a 'performer' "
+        + "attribute whose type is a role you declared with 'isA Role'. For "
+        + "example 'performer: Seller', given 'Seller isA Role with name: "
+        + "String, org: String, dept: String;'. Write that role's own name: "
+        + "'performer: Role' uses the base word and does not parse. Without a "
+        + "performer the generated event cannot be triggered on-chain.", type,
         SymboleoPackage.Literals.DOMAIN_TYPE__NAME);
   }
 

@@ -4,7 +4,9 @@
 package ca.uottawa.csmlab.symboleo;
 
 import org.eclipse.xtext.conversion.IValueConverterService;
+import org.eclipse.xtext.parser.antlr.ISyntaxErrorMessageProvider;
 
+import ca.uottawa.csmlab.symboleo.validation.SymboleoSyntaxErrorMessageProvider;
 import ca.uottawa.csmlab.symboleo.validation.SymboleoValueConverters;
 
 /**
@@ -13,5 +15,9 @@ import ca.uottawa.csmlab.symboleo.validation.SymboleoValueConverters;
 public class SymboleoRuntimeModule extends AbstractSymboleoRuntimeModule {
   public Class<? extends IValueConverterService> bindIValueConverterService() {
     return SymboleoValueConverters.class;
+  }
+
+  public Class<? extends ISyntaxErrorMessageProvider> bindISyntaxErrorMessageProvider() {
+    return SymboleoSyntaxErrorMessageProvider.class;
   }
 }
