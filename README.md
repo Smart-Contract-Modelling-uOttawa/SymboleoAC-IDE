@@ -19,11 +19,16 @@ without launching Eclipse.
 
 ### Download
 
-Grab the latest fat jar from the **Releases** page:
-
-[symboleo-cli-1.0.1-all.jar](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE/releases/latest)
+Grab `symboleo-cli-<version>-all.jar` from the assets of the
+**[latest release](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE/releases/latest)**
+(that link always resolves to the newest one — currently **1.0.1**, built
+against the July 2026 validator; see
+[`cli/README.md`](cli/README.md#versions) for the version history).
 
 Requires **Java 17+** on PATH. No other dependencies.
+
+The command lines below name the 1.0.1 jar; substitute whatever version you
+downloaded.
 
 ### Usage
 
