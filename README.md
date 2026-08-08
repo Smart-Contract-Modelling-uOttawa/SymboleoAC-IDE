@@ -19,16 +19,21 @@ without launching Eclipse.
 
 ### Download
 
-Grab the latest fat jar from the **Releases** page:
-
-[symboleo-cli-1.0.0-all.jar](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE/releases/latest)
+Grab `symboleo-cli-<version>-all.jar` from the assets of the
+**[latest release](https://github.com/Smart-Contract-Modelling-uOttawa/SymboleoAC-IDE/releases/latest)**
+(that link always resolves to the newest one — currently **1.0.1**, built
+against the July 2026 validator; see
+[`cli/README.md`](cli/README.md#versions) for the version history).
 
 Requires **Java 17+** on PATH. No other dependencies.
+
+The command lines below name the 1.0.1 jar; substitute whatever version you
+downloaded.
 
 ### Usage
 
 ```bash
-java -jar symboleo-cli-1.0.0-all.jar <input.symboleo> [options]
+java -jar symboleo-cli-1.0.1-all.jar <input.symboleo> [options]
 ```
 
 | Option | Description |
@@ -86,7 +91,7 @@ Ideal as input to an automated fixer (e.g. LLM):
 Validate a single file and dump errors as JSON:
 
 ```bash
-java -jar symboleo-cli-1.0.0-all.jar samples/MeatSale.symboleo \
+java -jar symboleo-cli-1.0.1-all.jar samples/MeatSale.symboleo \
      --format json --out errors.json
 ```
 
@@ -94,7 +99,7 @@ Batch-validate a directory, stopping on the first error (bash):
 
 ```bash
 for f in contracts/*.symboleo; do
-  java -jar symboleo-cli-1.0.0-all.jar "$f" --quiet || exit 1
+  java -jar symboleo-cli-1.0.1-all.jar "$f" --quiet || exit 1
 done
 ```
 
@@ -102,7 +107,7 @@ PowerShell equivalent:
 
 ```powershell
 Get-ChildItem contracts\*.symboleo | ForEach-Object {
-  java -jar symboleo-cli-1.0.0-all.jar $_.FullName --quiet
+  java -jar symboleo-cli-1.0.1-all.jar $_.FullName --quiet
   if ($LASTEXITCODE -ne 0) { throw "validation failed on $($_.Name)" }
 }
 ```

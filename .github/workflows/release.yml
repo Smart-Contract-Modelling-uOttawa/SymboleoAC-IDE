@@ -35,8 +35,9 @@ jobs:
         working-directory: cli
         run: |
           set -e
-          jar=target/symboleo-cli-1.0.0-all.jar
+          jar=$(ls target/symboleo-cli-*-all.jar)
           test -f "$jar"
+          echo "Testing $jar"
           for f in ../samples/*.symboleo; do java -jar "$jar" "$f" --quiet; done
 
       - name: Resolve tag
@@ -61,12 +62,12 @@ jobs:
 
             ## Download
 
-            Grab `symboleo-cli-1.0.0-all.jar` from the Assets below.
+            Grab `symboleo-cli-1.0.1-all.jar` from the Assets below.
 
             ## Usage
 
             ```bash
-            java -jar symboleo-cli-1.0.0-all.jar <input.symboleo> [--format text|json] [--out errors.json] [--quiet]
+            java -jar symboleo-cli-1.0.1-all.jar <input.symboleo> [--format text|json] [--out errors.json] [--quiet]
             ```
 
             Exit codes: `0` clean, `1` validation errors, `2` usage / I/O error.

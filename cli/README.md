@@ -5,6 +5,43 @@ and all `@Check` validations from `ca.uottawa.csmlab.symboleo` without starting
 Eclipse, so it is suitable for batch experiments and LLM transform-and-fix
 pipelines.
 
+## Versions
+
+The CLI carries no logic of its own beyond argument parsing and diagnostic
+formatting — it compiles the runtime project's validator straight into the fat
+jar, so its version tracks the state of `SymboleoValidator` at build time.
+
+### 1.0.1
+
+Rebuilt against the language/validator work of July 2026. Same CLI surface
+(flags, exit codes, JSON shape) as 1.0.0; what changed is *which diagnostics
+you get*:
+
+- **New C7 error rules** — event types without a Role-typed `performer` (E1),
+  reserved / generated-name collisions (E2), duplicate access-control rule
+  names (E3), Role types missing the attributes access control needs, e.g.
+  `dept` (E6), and inheritance cycles among domain types (E12a).
+- **New W13 unused-definition warnings** — domain types, contract parameters,
+  and declared instances that nothing references. Every domain type becomes a
+  class in the generated smart contract, so these are real dead weight.
+- **New lints (INFO)** — a grant whose `By` role has no evident authority over
+  the resource (L9), dormant conditional norms whose trigger can never fire
+  (L11), and cycles among variable initializations (L12b).
+- **Self-explanatory diagnostics throughout** — every message now states what
+  is wrong, why it matters, and how to fix it, rather than just naming the
+  violated constraint.
+
+Because W13 and the lints are new, specs that were silent under 1.0.0 may now
+report warnings. Exit codes are unchanged: warnings and lints still exit `0`,
+only `ERROR`-severity issues exit `1`.
+
+The grammar (`Symboleo.xtext`) is unchanged from 1.0.0, so no re-bootstrap of
+the Xtext-generated sources was needed for this release.
+
+### 1.0.0
+
+Initial release (May 2026).
+
 ## Build
 
 Requires JDK 17+, Maven 3.8+, and a one-time bootstrap of the Xtext-generated
@@ -47,12 +84,12 @@ $env:MAVEN_OPTS = "-Djavax.net.ssl.trustStoreType=Windows-ROOT"
 mvn -B clean package
 ```
 
-Output: `cli/target/symboleo-cli-1.0.0-all.jar` (fat / executable jar).
+Output: `cli/target/symboleo-cli-1.0.1-all.jar` (fat / executable jar).
 
 ## Run
 
 ```powershell
-java -jar target/symboleo-cli-1.0.0-all.jar ../samples/MeatSale.symboleo `
+java -jar target/symboleo-cli-1.0.1-all.jar ../samples/MeatSale.symboleo `
      --format json --out errors.json
 ```
 
