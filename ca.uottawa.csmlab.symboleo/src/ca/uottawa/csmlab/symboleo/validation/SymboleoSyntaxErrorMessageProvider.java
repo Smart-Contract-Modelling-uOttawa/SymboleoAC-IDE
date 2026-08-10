@@ -34,6 +34,9 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
       Arrays.asList("Number", "String", "Boolean"));
   private static final Set<String> ONTOLOGY_TYPES = new HashSet<String>(
       Arrays.asList("Asset", "Event", "Role", "Contract", "DataTransfer"));
+  /** The PowerFunction actions — legal as a power's consequent, nowhere else. */
+  private static final Set<String> NORM_STATES = new HashSet<String>(
+      Arrays.asList("Suspended", "Resumed", "Discharged", "Terminated", "Triggered"));
 
   @Override
   public SyntaxErrorMessage getSyntaxErrorMessage(IParserErrorContext context) {
@@ -103,6 +106,17 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
           + "Suspended(obligations.<name>), Resumed(obligations.<name>), "
           + "Triggered(obligations.<name>) - so a value update belongs in an obligation, "
           + "not in a power.";
+    }
+    if (NORM_STATES.contains(text) && noViableAlt) {
+      // The archive's single most frequent stall: a mandatory "shall terminate"
+      // written as O(..., Terminated(self)). The word is legal only as a
+      // power's consequent, and the raw error names neither that restriction
+      // nor the construct to move to.
+      return "'" + text + "(...)' changes the state of a norm or the contract, and only "
+          + "a power's consequent may do that. If this is an obligation's consequent, "
+          + "move it to a power - 'p1: P(creditor, debtor, <antecedent>, " + text
+          + "(...))' - and model even a mandatory \"shall suspend/terminate\" as a "
+          + "power, since the language has no other way to express a state change.";
     }
     if ("Happens".equals(text) && noViableAlt) {
       return "if this 'Happens' is the last argument of a P(...) power: a power's "
