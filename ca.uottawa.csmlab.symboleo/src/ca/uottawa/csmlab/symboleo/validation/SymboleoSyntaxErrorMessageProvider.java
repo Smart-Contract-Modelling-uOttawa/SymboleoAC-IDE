@@ -57,6 +57,37 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
   private static final Set<String> NORM_STATES = new HashSet<String>(
       Arrays.asList("Suspended", "Resumed", "Discharged", "Terminated", "Triggered"));
 
+  /**
+   * Keywords that may legally follow {@code ID ':'}, where the reserved-word
+   * fallback cannot tell a misnamed declaration from a derailed parse.
+   *
+   * A declaration and a norm open identically — {@code name=ID ':' Type 'with'}
+   * against {@code name=ID ':' (Proposition '->')? ('O'|'Obligation') '('}
+   * (Symboleo.xtext, Obligation/Power at 223-228). So an unresolved error inside
+   * Declarations leaves the parser reading the Obligations section as more
+   * declarations, and a perfectly correct {@code o1: O(...)} is reported as
+   * "mismatched input 'O' expecting RULE_ID". Concluding from that the author
+   * used 'O' as a name is a false positive the grammar guarantees, and acting on
+   * it destroys working code.
+   *
+   * The members are the norm heads plus the first-set of the optional trigger
+   * Proposition: PredicateFunction and OtherFunction (274-291) and the atomic
+   * literals (260-272). Several are unreachable here because an earlier branch
+   * claims them first; they are listed anyway so this set states the grammar
+   * rule rather than whatever happens to be left over.
+   *
+   * Applied whichever token was expected, not only RULE_ID: a Domain section
+   * that fails to close derails the same way, and none of these words is a
+   * plausible declared name to begin with — so the cost of suppressing is a
+   * hint nobody needed, against a confident instruction to break a correct line.
+   */
+  private static final Set<String> LEGAL_AFTER_NAME_COLON = new HashSet<String>(Arrays.asList(
+      "O", "Obligation", "P", "Power",
+      "Happens", "WhappensBefore", "ShappensBefore", "HappensWithin", "WhappensBeforeE",
+      "ShappensBeforeE", "HappensAfter", "Occurs", "HappensAssign", "Assign",
+      "IsEqual", "IsOwner", "CannotBeAssigned",
+      "not", "true", "false", "Date"));
+
   @Override
   public SyntaxErrorMessage getSyntaxErrorMessage(IParserErrorContext context) {
     SyntaxErrorMessage standard = super.getSyntaxErrorMessage(context);
@@ -147,13 +178,20 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
     }
     // A remaining identifier-shaped keyword in a position where a name was
     // required (or where a section terminator was expected, the signature of a
-    // reserved word used as a type name in the Domain block).
+    // reserved word used as a type name in the Domain block) — unless the word
+    // is one the grammar allows there anyway, in which case the report is
+    // evidence of a derailed parse rather than of a misnamed declaration.
     if (isKeywordToken(exception.token, names) && looksLikeIdentifier(text)
+        && !LEGAL_AFTER_NAME_COLON.contains(text)
         && ("RULE_ID".equals(expecting) || "endDomain".equals(expecting)
             || "endContract".equals(expecting))) {
+      // A suffix, but not a presumed category: 'Event' is right for an event
+      // and wrong for everything else, and a reader copies the example
+      // literally.
       return "'" + text + "' is a reserved word in SymboleoAC and cannot be used as a "
-          + "name you declare. Rename the identifier (for example '" + text
-          + "Event' or another suffixed form) here and at every reference to it.";
+          + "name you declare. Rename it here and at every reference to it - a suffix "
+          + "naming what it is works ('" + text + "Event' for an event, '" + text
+          + "Record' for an asset).";
     }
     return null;
   }
