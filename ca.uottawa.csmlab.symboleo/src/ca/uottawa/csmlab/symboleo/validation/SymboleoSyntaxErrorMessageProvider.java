@@ -22,13 +22,32 @@ import org.eclipse.xtext.parser.antlr.SyntaxErrorMessageProvider;
  * "no viable alternative at input 'Assign'". None of them name the offending
  * identifier or the legal alternative, so the error is very hard to act on.
  *
- * Every rewrite here is ADDITIVE: the default message is kept and a hint is
- * appended. A misclassified context therefore loses no information - the
- * reader gets the standard message plus a possibly-irrelevant note - which
- * keeps the provider safe to apply on heuristics keyed off the offending
- * token alone.
+ * The hint is carried OUT OF BAND: the default message is passed through
+ * byte-for-byte, and the guidance travels in the issue's data array under the
+ * issue code {@link #HINT_CODE}. Two consequences that motivate the choice over
+ * appending to the message text:
+ *
+ * <ul>
+ * <li>No existing consumer breaks. Anything matching on the ANTLR message -
+ * downstream tooling, test assertions, log greps - sees exactly what it saw
+ * before, so this is additive at the API level and not only in spirit.</li>
+ * <li>A consumer decides for itself whether to surface the hint, and can do so
+ * without reparsing prose out of a message string.</li>
+ * </ul>
+ *
+ * Hints are heuristics keyed off the offending token alone - the provider
+ * cannot see syntactic context - so several are phrased conditionally ("if this
+ * is an obligation's consequent"). Keeping them out of the message means a
+ * misclassified context costs a reader nothing.
  */
 public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvider {
+
+  /**
+   * Issue code marking a diagnostic that carries a hint in {@code getData()[0]}.
+   * Consumers should treat the data element as advisory prose, not as a stable
+   * contract - the wording is expected to improve.
+   */
+  public static final String HINT_CODE = "ca.uottawa.csmlab.symboleo.syntaxHint";
 
   private static final Set<String> BASE_TYPES = new HashSet<String>(
       Arrays.asList("Number", "String", "Boolean"));
@@ -48,8 +67,10 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
     if (hint == null) {
       return standard;
     }
-    return new SyntaxErrorMessage(standard.getMessage() + " Hint: " + hint,
-        standard.getIssueCode());
+    // Message untouched; guidance rides in the data array. The issue code is
+    // overwritten rather than preserved because the default provider leaves it
+    // null for syntax errors - there is nothing here to lose.
+    return new SyntaxErrorMessage(standard.getMessage(), HINT_CODE, new String[] {hint});
   }
 
   private String hintFor(IParserErrorContext context) {

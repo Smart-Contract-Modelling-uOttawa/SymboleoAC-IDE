@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -203,6 +204,16 @@ public final class Cli {
                     + " [" + i.getLineNumber() + ":" + i.getColumn() + "] "
                     + i.getMessage()
                     + (i.getCode() != null ? "  (" + i.getCode() + ")" : ""));
+            // Continuation lines rather than a longer first line: a human wants
+            // the hint, and a `grep` for the parser's own wording still matches
+            // exactly one line per issue.
+            if (i.getData() != null) {
+                for (String datum : i.getData()) {
+                    if (datum != null && !datum.isEmpty()) {
+                        w.println("    hint: " + datum);
+                    }
+                }
+            }
         }
     }
 
@@ -224,6 +235,19 @@ public final class Cli {
             o.put("length", i.getLength() == null ? JSONObject.NULL : i.getLength());
             o.put("message", String.valueOf(i.getMessage()));
             o.put("code", i.getCode() == null ? JSONObject.NULL : i.getCode());
+            // Issue.getData() carries structured extras the message deliberately
+            // does not - currently the syntax-hint guidance. Emitted as its own
+            // field so a consumer can render, ignore, or count hints without
+            // parsing prose out of `message`, which stays byte-identical to what
+            // the parser produced.
+            //
+            // Absent data is always JSON null, never []: Xtext hands @Check
+            // issues a zero-length String[] and syntax issues a null one, and a
+            // consumer should not have to know which. One representation of
+            // "nothing here" is one fewer special case at every call site.
+            o.put("data", i.getData() == null || i.getData().length == 0
+                    ? JSONObject.NULL
+                    : new JSONArray(Arrays.asList(i.getData())));
             arr.put(o);
         }
         root.put("issues", arr);
