@@ -235,16 +235,11 @@ public final class Cli {
             o.put("length", i.getLength() == null ? JSONObject.NULL : i.getLength());
             o.put("message", String.valueOf(i.getMessage()));
             o.put("code", i.getCode() == null ? JSONObject.NULL : i.getCode());
-            // Issue.getData() carries structured extras the message deliberately
-            // does not - currently the syntax-hint guidance. Emitted as its own
-            // field so a consumer can render, ignore, or count hints without
-            // parsing prose out of `message`, which stays byte-identical to what
-            // the parser produced.
-            //
-            // Absent data is always JSON null, never []: Xtext hands @Check
-            // issues a zero-length String[] and syntax issues a null one, and a
-            // consumer should not have to know which. One representation of
-            // "nothing here" is one fewer special case at every call site.
+            // Structured extras the message deliberately omits (currently the
+            // syntax hint), as a separate field so consumers need not parse
+            // prose out of `message`. Absent data is always JSON null, never
+            // []: Xtext hands @Check issues a zero-length array and syntax
+            // issues a null one, and a consumer should not have to know which.
             o.put("data", i.getData() == null || i.getData().length == 0
                     ? JSONObject.NULL
                     : new JSONArray(Arrays.asList(i.getData())));

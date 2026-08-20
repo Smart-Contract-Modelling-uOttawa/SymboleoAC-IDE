@@ -12,40 +12,25 @@ import org.eclipse.xtext.nodemodel.SyntaxErrorMessage;
 import org.eclipse.xtext.parser.antlr.SyntaxErrorMessageProvider;
 
 /**
- * Turns the raw ANTLR parse errors that observably stall automated (LLM) and
- * human correction alike into actionable diagnostics.
+ * Attaches actionable hints to the ANTLR parse errors that recur in generated
+ * SymboleoAC, where the raw message names grammar internals rather than the
+ * mistake (a reserved word used as a type name surfaces as "mismatched input
+ * 'Asset' expecting 'endDomain'" - neither the offending identifier nor the
+ * legal alternative).
  *
- * The raw messages name grammar internals rather than the mistake: a reserved
- * word used as a type name surfaces as "mismatched input 'Asset' expecting
- * 'endDomain'", a base-typed variable declaration as "mismatched input
- * 'Number' expecting RULE_ID", and an Assign(...) in a power's consequent as
- * "no viable alternative at input 'Assign'". None of them name the offending
- * identifier or the legal alternative, so the error is very hard to act on.
+ * The default message passes through byte-for-byte; the hint travels out of
+ * band in the issue's data array under {@link #HINT_CODE}. Consumers matching
+ * on message text are unaffected, and surfacing a hint is an opt-in per issue
+ * code rather than prose to reparse out of the message.
  *
- * The hint is carried OUT OF BAND: the default message is passed through
- * byte-for-byte, and the guidance travels in the issue's data array under the
- * issue code {@link #HINT_CODE}. Two consequences that motivate the choice over
- * appending to the message text:
- *
- * <ul>
- * <li>No existing consumer breaks. Anything matching on the ANTLR message -
- * downstream tooling, test assertions, log greps - sees exactly what it saw
- * before, so this is additive at the API level and not only in spirit.</li>
- * <li>A consumer decides for itself whether to surface the hint, and can do so
- * without reparsing prose out of a message string.</li>
- * </ul>
- *
- * Hints are heuristics keyed off the offending token alone - the provider
- * cannot see syntactic context - so several are phrased conditionally ("if this
- * is an obligation's consequent"). Keeping them out of the message means a
- * misclassified context costs a reader nothing.
+ * Hints are keyed off the offending token alone - the provider cannot see
+ * syntactic context - so several are phrased conditionally.
  */
 public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvider {
 
   /**
-   * Issue code marking a diagnostic that carries a hint in {@code getData()[0]}.
-   * Consumers should treat the data element as advisory prose, not as a stable
-   * contract - the wording is expected to improve.
+   * Issue code marking a diagnostic whose {@code getData()[0]} carries a hint.
+   * The hint is advisory prose, not a stable contract - wording will improve.
    */
   public static final String HINT_CODE = "ca.uottawa.csmlab.symboleo.syntaxHint";
 
@@ -58,28 +43,20 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
       Arrays.asList("Suspended", "Resumed", "Discharged", "Terminated", "Triggered"));
 
   /**
-   * Keywords that may legally follow {@code ID ':'}, where the reserved-word
-   * fallback cannot tell a misnamed declaration from a derailed parse.
+   * Keywords the grammar allows after {@code ID ':'}, where the reserved-word
+   * hint below must stay silent. A declaration and a norm open identically
+   * ({@code name=ID ':' Type 'with'} vs {@code name=ID ':' ... 'O' '('}), so an
+   * unresolved error inside Declarations leaves the parser reading norms as
+   * more declarations and reporting a correct {@code o1: O(...)} as "mismatched
+   * input 'O' expecting RULE_ID" - and a rename hint there instructs the reader
+   * to break a correct line.
    *
-   * A declaration and a norm open identically — {@code name=ID ':' Type 'with'}
-   * against {@code name=ID ':' (Proposition '->')? ('O'|'Obligation') '('}
-   * (Symboleo.xtext, Obligation/Power at 223-228). So an unresolved error inside
-   * Declarations leaves the parser reading the Obligations section as more
-   * declarations, and a perfectly correct {@code o1: O(...)} is reported as
-   * "mismatched input 'O' expecting RULE_ID". Concluding from that the author
-   * used 'O' as a name is a false positive the grammar guarantees, and acting on
-   * it destroys working code.
-   *
-   * The members are the norm heads plus the first-set of the optional trigger
-   * Proposition: PredicateFunction and OtherFunction (274-291) and the atomic
-   * literals (260-272). Several are unreachable here because an earlier branch
-   * claims them first; they are listed anyway so this set states the grammar
-   * rule rather than whatever happens to be left over.
-   *
-   * Applied whichever token was expected, not only RULE_ID: a Domain section
-   * that fails to close derails the same way, and none of these words is a
-   * plausible declared name to begin with — so the cost of suppressing is a
-   * hint nobody needed, against a confident instruction to break a correct line.
+   * Members are the norm heads plus the first-set of the optional trigger
+   * Proposition, stated from the grammar rules rather than from observed
+   * failures; some are unreachable because an earlier branch claims them first,
+   * and are listed anyway so the set encodes the rule. Applied whichever token
+   * was expected, not only RULE_ID: an unclosed Domain section derails the same
+   * way, and none of these words is a plausible declared name to begin with.
    */
   private static final Set<String> LEGAL_AFTER_NAME_COLON = new HashSet<String>(Arrays.asList(
       "O", "Obligation", "P", "Power",
@@ -98,9 +75,8 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
     if (hint == null) {
       return standard;
     }
-    // Message untouched; guidance rides in the data array. The issue code is
-    // overwritten rather than preserved because the default provider leaves it
-    // null for syntax errors - there is nothing here to lose.
+    // The default provider leaves the issue code null for syntax errors, so
+    // overwriting it loses nothing.
     return new SyntaxErrorMessage(standard.getMessage(), HINT_CODE, new String[] {hint});
   }
 
@@ -160,10 +136,9 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
           + "not in a power.";
     }
     if (NORM_STATES.contains(text) && noViableAlt) {
-      // The archive's single most frequent stall: a mandatory "shall terminate"
-      // written as O(..., Terminated(self)). The word is legal only as a
-      // power's consequent, and the raw error names neither that restriction
-      // nor the construct to move to.
+      // The most frequent generated mistake: a mandatory "shall terminate"
+      // written as O(..., Terminated(self)); the raw error names neither the
+      // restriction nor the construct to move to.
       return "'" + text + "(...)' changes the state of a norm or the contract, and only "
           + "a power's consequent may do that. If this is an obligation's consequent, "
           + "move it to a power - 'p1: P(creditor, debtor, <antecedent>, " + text
@@ -176,18 +151,16 @@ public class SymboleoSyntaxErrorMessageProvider extends SyntaxErrorMessageProvid
           + "Suspended(obligations.<name>); an awaited event belongs in the power's "
           + "antecedent (the third argument) instead.";
     }
-    // A remaining identifier-shaped keyword in a position where a name was
-    // required (or where a section terminator was expected, the signature of a
-    // reserved word used as a type name in the Domain block) — unless the word
-    // is one the grammar allows there anyway, in which case the report is
-    // evidence of a derailed parse rather than of a misnamed declaration.
+    // An identifier-shaped keyword where a name or section terminator was
+    // expected: a reserved word used as a declared name - unless the grammar
+    // allows the word there, which marks a derailed parse instead (see
+    // LEGAL_AFTER_NAME_COLON).
     if (isKeywordToken(exception.token, names) && looksLikeIdentifier(text)
         && !LEGAL_AFTER_NAME_COLON.contains(text)
         && ("RULE_ID".equals(expecting) || "endDomain".equals(expecting)
             || "endContract".equals(expecting))) {
-      // A suffix, but not a presumed category: 'Event' is right for an event
-      // and wrong for everything else, and a reader copies the example
-      // literally.
+      // Offer a suffix without presuming the category: a reader copies the
+      // example literally, and 'Event' is wrong for anything not an event.
       return "'" + text + "' is a reserved word in SymboleoAC and cannot be used as a "
           + "name you declare. Rename it here and at every reference to it - a suffix "
           + "naming what it is works ('" + text + "Event' for an event, '" + text
